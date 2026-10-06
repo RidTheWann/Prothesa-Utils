@@ -1,0 +1,5 @@
+# Contoh submodule untuk template privat. Copy menjadi `.gitmodules` dan sesuaikan URL.
+# [submodule "_TEMPLATES-private"]
+#   path = _TEMPLATES-private
+#   url = https://github.com/USERNAME/prothesa-templates-private.git
+#   branch = main

@@ -1,0 +1,39 @@
+# ===== Prothesa Utils — GitHub Safe (.gitignore) =====
+# Arsip data pasien: JANGAN pernah di-commit (pola tahun A=, B=, C=, ...).
+# Bentuk tanpa slash (file/dir belum ada) + bentuk direktori.
+?=PROTHESA *
+?=PROTHESA */
+[A-Z]=PROTHESA *
+[A-Z]=PROTHESA */
+# ZIP bulanan hasil kompresi (nama employer: "1=PROTHESA ... .zip")
+*=PROTHESA *.zip
+*.zip
+# Status hasil scan lokal (1MB+, berisi nama file pasien)
+prothesa-status.json
+# Konfigurasi lokal user (berisi absolute path D:\...)
+ProthesaConfig.json
+!ProthesaConfig.default.json
+# Template asli (.doc/.xlsx berisi kop & data praktek) — private, via submodule
+_TEMPLATES/*.doc
+_TEMPLATES/*.xlsx
+_TEMPLATES/*.xls
+!_TEMPLATES/README.md
+!_TEMPLATES/.gitkeep
+# Bundel data terenkripsi lokal (DPAPI, hanya bisa dibuka di mesin pembuat)
+*.prothesa
+*.prothesa.json
+# Duplikat/portabel lama + output build
+PACK-PROTHESA
+PACK-PROTHESA/
+dist/
+staging/
+installer/Output/
+installer/stage/
+installer/app-version.isi
+# Log & sampah Windows/Office
+*.log
+~$*.doc
+~$*.xlsx
+Thumbs.db
+desktop.ini
+.vscode/

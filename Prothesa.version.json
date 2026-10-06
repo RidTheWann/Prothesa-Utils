@@ -1,0 +1,8 @@
+{
+    "name": "ProthesaUtil",
+    "version": "2.1.0",
+    "developer": "Ridwan Gatro (RidTheWann)",
+    "entry_gui": "ProthesaWinUtil.ps1",
+    "entry_cli": "ProthesaManager.ps1",
+    "requires": "Windows PowerShell 5.1+ (STA untuk GUI), Microsoft Word/Excel hanya untuk fitur Isi Dokumen"
+}
