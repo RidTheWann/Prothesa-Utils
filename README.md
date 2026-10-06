@@ -1,193 +1,165 @@
-# 🦷 Prothesa Manager
+# Prothesa Util
 
-**Tools Otomasi & Manajemen Arsip Klaim Prothesa Gigi BPJS — drg. Danny Hanggono, Praktek Waru**  
-*100% Pure PowerShell Native Ecosystem — Tanpa Server & Tanpa Dependensi Eksternal.*  
+**Tools otomasi dan manajemen arsip klaim prothesa gigi BPJS — drg. Danny Hanggono, Praktek Waru.**
+100% PowerShell native (WinForms + CLI), tanpa server dan tanpa dependensi eksternal.
+
 *Developer: Ridwan Gatro (RidTheWann)*
+*Versi: 2.1.0*
 
 ---
 
-## 🌟 Ringkasan Arsitektur Proyek
+## Cara Pakai (Pengguna Akhir)
 
-Project ini dibangun sepenuhnya menggunakan **PowerShell** dengan antarmuka grafis native Windows Forms (WinForms) bertema gelap modern ala Chris Titus WinUtil, dipadukan dengan CLI interaktif untuk terminal:
+Aplikasi **wajib diinstall** — file EXE tidak bisa dijalankan langsung (double-click tanpa install akan menampilkan peringatan).
 
-| Komponen | File / Launcher | Kegunaan |
-|---|---|---|
-| 🖥️ **Modern Desktop GUI** | `JALANKAN PROTHESA UTIL.bat`<br>`ProthesaWinUtil.ps1` | Antarmuka grafis bergaya WinUtil modern, kartu navigasi, ringkasan real-time, monitoring pohon status arsip interaktif |
-| ⚙️ **Terminal CLI Interaktif** | `JALANKAN MANAGER.bat`<br>`ProthesaManager.ps1` | CLI menu interaktif di terminal PowerShell untuk buat folder bulan, copy template, update dokumen, kompresi ZIP |
-| 📁 **Master Template Mandiri** | `_TEMPLATES/`<br>`PACK-PROTHESA/_TEMPLATES/` | 5 berkas template bersih (.xlsx & .doc) yang dapat langsung dipakai di komputer/folder baru **tanpa memerlukan arsip tahun lama** |
-| 🔍 **Single-Source Validation** | `Test-ProthesaMonthValidation` *(dalam `ProthesaManager.ps1`)* | Satu-satunya sumber kebenaran validasi kelengkapan berkas: 5 berkas admin, 9 berkas umum PDF non-zero byte, dan berkas pasien RJTP |
+### Opsi A — Setup.exe (disarankan)
 
----
+1. Jalankan `ProthesaUtil-Setup-2.1.0.exe` (dari halaman Releases).
+2. Jika muncul SmartScreen ("Windows protected your PC") karena file belum ditandatangani digital: pilih *More info* → *Run anyway*.
+3. Ikuti wizard (Next → Install → Finish). Tidak butuh hak admin.
+4. Centang "Pasang data contoh terenkripsi" bila tersedia — sampel bulan terakhir akan di-decrypt otomatis ke folder data.
 
-## ⚡ Quick Start (Mulai Cepat)
+Menjalankan Setup saat aplikasi sudah terinstall akan ditolak dengan peringatan (uninstall dulu versi lama).
 
-### 1. Jalankan via Launcher Desktop (.bat)
-Cukup double-click file launcher di folder ini:
-* **`JALANKAN PROTHESA UTIL.bat`** : Membuka antarmuka grafis Desktop Modern (Rekomendasi Utama).
-* **`JALANKAN MANAGER.bat`** : Membuka terminal interaktif CLI.
+### Opsi B — Installer PowerShell
 
-### 2. Atau Jalankan Langsung via PowerShell
-Buka PowerShell di folder project (`D:\Project prothesa utils`), lalu jalankan:
 ```powershell
-# Jalankan GUI Modern
+powershell -ExecutionPolicy Bypass -File .\Install-Prothesa.ps1
+```
+
+Menginstall ke `%LocalAppData%\ProthesaUtil` (EXE + data contoh + shortcut + entri Uninstall).
+Install ulang tanpa `-Force` akan ditolak bila sudah terinstall.
+
+### Mode developer (tanpa install)
+
+Jalankan langsung dari source untuk pengembangan:
+
+```powershell
+# GUI
 powershell -ExecutionPolicy Bypass -STA -File .\ProthesaWinUtil.ps1
 
-# Atau jalankan Terminal CLI
+# CLI
 powershell -ExecutionPolicy Bypass -File .\ProthesaManager.ps1
 ```
 
-### 3. Buat / Perbarui Shortcut Desktop
-Untuk memasang shortcut praktis di Desktop:
+---
+
+## Komponen
+
+| Komponen | File | Kegunaan |
+|---|---|---|
+| GUI Desktop | `ProthesaWinUtil.ps1` / `ProthesaUtil.exe` | Antarmuka WinForms: ringkasan, buat bulan, copy template, kelola pasien, isi dokumen, ZIP, monitoring pohon status |
+| CLI Terminal | `ProthesaManager.ps1` | Menu interaktif terminal + fungsi validasi terpusat (`Test-ProthesaMonthValidation`) |
+| Vault Data | `ProthesaDataVault.ps1` | Kompres ZIP + enkripsi DPAPI untuk data penting (format `.prothesa`) |
+| Installer PS | `Install-Prothesa.ps1` / `Uninstall-Prothesa.ps1` | Install/uninstall per-user tanpa admin |
+| Installer Setup | `installer/ProthesaUtil.iss` + `Build-Setup.ps1` | Membangun `Setup.exe` via Inno Setup |
+| Build | `Build-Prothesa.ps1` / `Merge-Prothesa.ps1` | Merge single-file, ZIP portable, compile EXE |
+
+---
+
+## Data Penting Terenkripsi (Vault)
+
+Data penting dibundel sebagai `.prothesa` (ZIP terkompres → dienkripsi DPAPI akun Windows lokal):
+
+- Tanpa password, tetapi **hanya bisa dibuka di akun/mesin yang membuatnya** (prioritaskan lokal).
+- Bundel bawaan berisi **sampel 1 bulan terakhir** dan dipasang otomatis saat install / via tombol wizard setup awal.
+- File `.prothesa` tidak pernah di-commit ke repo publik (di-ignore).
+
+Fungsi terkait: `New-ProthesaBundle`, `Test-ProthesaBundle`, `Expand-ProthesaBundle`, `New-ProthesaSampleBundle`, `Install-ProthesaSample`, `Find-ProthesaBundle` (lihat `ProthesaDataVault.ps1`).
+
+---
+
+## Template Master (`_TEMPLATES/`)
+
+Repo publik sengaja **tidak menyertakan** file template asli (`.doc`/`.xlsx` berisi kop dan data praktek).
+Template resmi disimpan di repo privat dan dipasang sebagai submodule — lihat `_TEMPLATES/README.md` dan `.gitmodules.example`.
+
+Urutan pencarian template (`Get-TemplateSourceDir`):
+
+1. Folder `_TEMPLATES/` lokal (standalone)
+2. Folder `_TEMPLATES-private/` (submodule privat)
+3. Folder arsip bulan sebelumnya (fallback dinamis)
+
+Tanpa template pun aplikasi tetap berjalan (buat folder bulan/pasien); hanya fitur Copy Template yang memberi panduan.
+
+---
+
+## Validasi Single-Source (`Test-ProthesaMonthValidation`)
+
+Satu-satunya sumber kebenaran status kelengkapan, dipakai GUI maupun CLI:
+
+1. **5 berkas administrasi** (root bulan): Administrasi Klaim (xlsx), REKAP PROTHESA, Surat Pengantar, Pernyataan Klaim Tagihan, Pernyataan Tidak Ada Tercecer — ukuran > 0 byte.
+2. **9 berkas umum** (folder BERKAS UMUM, PDF): BAST, BAKB, BAHV, SPTJM, Pernyataan Tidak Ada Klaim Tercecer, FPK, Rekap Prothesa, Kwitansi, SPKTPK.
+3. **Berkas pasien RJTP**: tiap folder pasien wajib berisi BUKTI LAYANAN, FKPP, dan RESEP PROTHESA (PDF non-zero byte).
+4. **File ZIP** bulan di folder tahun.
+
+Status: `complete` (Lengkap) / `ready_to_zip` (Siap ZIP) / `in_progress` (Belum Lengkap) / `empty` (Kosong).
+
+---
+
+## Tab GUI
+
+1. **Beranda** — ringkasan tahun/bulan/pasien/lengkap, lokasi arsip, scan + ringkasan teks.
+2. **Buat Bulan** — struktur folder bulan + subfolder KLAIM, BERKAS UMUM, RJTP.
+3. **Copy Template** — salin 5 template master.
+4. **Kelola Pasien** — tambah satuan atau batch + placeholder standar.
+5. **Isi Dokumen** — auto-fill Word/Excel via COM (FPK, kasus, biaya, tanggal TTD, romawi) dengan pelepasan memori aman.
+6. **Kompresi ZIP** — arsip bulan siap kirim.
+7. **Monitoring Arsip** — pohon status interaktif; double-click membuka folder di Explorer.
+
+Menu CLI (`ProthesaManager.ps1`): buat bulan, copy template, pasien satuan/batch, ZIP, scan, ringkasan, update template, keluar.
+
+---
+
+## Struktur Repo (publik)
+
+```
+Prothesa-Utils/
+├── ProthesaWinUtil.ps1 / ProthesaManager.ps1 / ProthesaDataVault.ps1
+├── Merge-Prothesa.ps1 / Build-Prothesa.ps1 / Build-Setup.ps1
+├── Install-Prothesa.ps1 / Uninstall-Prothesa.ps1
+├── JALANKAN *.bat, BUAT/UPDATE-SHORTCUT, Prothesa.version.json
+├── installer/ProthesaUtil.iss + installer/Seed-Sample.ps1
+└── _TEMPLATES/README.md (+ .gitkeep)
+```
+
+Yang TIDAK masuk repo (di-ignore): folder arsip (`A=`, `B=`, `C=`, ...), `*.prothesa`, `dist/`, `installer/Output/`, `prothesa-status.json`, `ProthesaConfig.json`.
+
+Binari rilis (`ProthesaUtil.exe`, `Setup.exe`, ZIP portable) didistribusikan via halaman **Releases**, bukan commit.
+
+---
+
+## Build dari Source
+
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\UPDATE-SHORTCUT.ps1
+# Merge single-file
+powershell -ExecutionPolicy Bypass -File .\Merge-Prothesa.ps1
+
+# Portable ZIP (butuh ps2exe bila pakai -MakeExe)
+powershell -ExecutionPolicy Bypass -File .\Build-Prothesa.ps1 -MakeExe
+
+# Setup.exe (butuh Inno Setup 6 / otomatis via winget bila belum ada)
+powershell -ExecutionPolicy Bypass -File .\Build-Setup.ps1
 ```
 
----
-
-## 📁 Mekanisme Template Mandiri (`_TEMPLATES/`)
-
-Script dirancang agar **dapat digunakan secara mandiri tanpa memerlukan folder root arsip historis** (`A=PROTHESA 2024`, `B=PROTHESA 2025`, atau `C=PROTHESA 2026`).
-
-### Berkas Master Template:
-1. `Administrasi Klaim TEMPLATE.xlsx` *(Excel formulir klaim & tanda terima)*
-2. `REKAP PROTHESA TEMPLATE.doc` *(Word rekapitulasi pelayanan)*
-3. `SURAT Pengantar ke BPJS klaim TEMPLATE.doc` *(Word surat pengantar)*
-4. `surat pernyataan KLAIM TAGIHAN TEMPLATE.doc` *(Word surat pernyataan tagihan)*
-5. `surat pernyataan tidak ada tercecer TEMPLATE.doc` *(Word surat pernyataan anti tercecer)*
-
-### Prioritas Pengambilan Template:
-1. **Folder `_TEMPLATES/` lokal** (Prioritas Utama — Standalone Mode)
-2. Folder `PACK-PROTHESA\_TEMPLATES/` (Fallback portabel)
-3. Folder arsip bulan sebelumnya (Fallback dinamis)
-
-Jika project ini dipindahkan ke komputer baru yang belum memiliki riwayat tahun sebelumnya, sistem tetap **100% berfungsi normal** membuat bulan baru dan menyiapkan template.
+Catatan: EXE dikompilasi x64 + STA. Untuk COM Word/Excel, samakan bitness EXE dengan instalasi Office.
 
 ---
 
-## 🔍 Single-Source of Truth Validation (`Test-ProthesaMonthValidation`)
+## FAQ
 
-Seluruh pemeriksaan kelengkapan berkas dihitung secara eksklusif oleh fungsi PowerShell `Test-ProthesaMonthValidation` di `ProthesaManager.ps1`, sehingga hasil validasi di GUI WinUtil maupun CLI selalu 100% konsisten.
+**Apakah butuh Node.js / Python / server?**
+Tidak. 100% PowerShell + .NET bawaan Windows.
 
-### Kriteria Validasi Komprehensif:
-1. **5 Berkas Dokumen Administrasi Klaim (Root Bulan)**
-   * `Administrasi Klaim *.xlsx` (Ukuran > 0 byte)
-   * `REKAP PROTHESA *.doc` (Ukuran > 0 byte)
-   * `SURAT Pengantar *.doc` (Ukuran > 0 byte)
-   * `surat pernyataan KLAIM TAGIHAN *.doc` (Ukuran > 0 byte)
-   * `surat pernyataan tidak ada tercecer *.doc` (Ukuran > 0 byte)
-2. **9 Berkas Dokumen Umum (Folder `BERKAS UMUM`)**
-   * BAST, BAKB, BAHV, SPTJM, PERNYATAAN TIDAK ADA KLAIM TERCECER, FPK, REKAP PROTHESA, KWITANSI, SPKTPK
-   * Seluruh 9 berkas harus berupa PDF valid dengan ukuran **> 0 byte** (tidak corrupt / bukan placeholder kosong).
-3. **Berkas Pasien Rawat Jalan Tingkat Pertama (RJTP)**
-   * Setiap subfolder pasien (1, 2, 3...) wajib memiliki 3 berkas PDF non-zero byte:
-     * `BUKTI LAYANAN [NAMA].pdf`
-     * `FKPP [NAMA].pdf`
-     * `RESEP PROTHESA [NAMA].pdf`
-4. **Berkas Arsip ZIP**
-   * File `<NamaBulan>.zip` wajib ada di folder induk tahun dengan ukuran > 0 byte.
+**Word/Excel hang saat auto-fill?**
+Script memakai `FinalReleaseComObject` + GC ganda; proses latar ditutup bersih bila error.
 
-### Klasifikasi Status Otomatis:
-* 🟢 **Lengkap (`complete`)** : Admin 5/5, Berkas Umum 9/9, Pasien 100% lengkap, dan ZIP sudah dibuat.
-* 🔷 **Siap ZIP (`ready_to_zip`)** : Admin 5/5, Berkas Umum 9/9, Pasien 100% lengkap, tinggal dikompresi ke ZIP.
-* 🟡 **Belum Lengkap (`in_progress`)** : Masih ada berkas yang kurang atau masih berukuran 0 byte.
-* ⚫ **Kosong (`empty`)** : Folder bulan baru dibuat, belum ada pengisian berkas.
+**Data lama tertimpa saat buat bulan baru?**
+Tidak. File/folder yang sudah ada dilewati (skip), termasuk pemasangan sampel.
+
+**Bundel `.prothesa` tidak bisa dibuka di PC lain?**
+Benar, itu sifat DPAPI (terikat akun/mesin pembuat). Pack ulang sampel di PC tersebut.
 
 ---
 
-## 🖥️ Panduan Antarmuka Desktop (Prothesa WinUtil GUI)
-
-Antarmuka GUI menyediakan 7 tab navigasi cepat:
-
-1. **🏠 Beranda** : Kartu ringkasan total tahun, bulan, pasien, dan bulan lengkap, pengaturan folder data arsip, serta tombol scan dan shortcut Explorer.
-2. **🗓️ Buat Bulan** : Buat struktur folder bulan baru lengkap dengan subfolder KLAIM, BERKAS UMUM, dan RJTP dalam 1 klik.
-3. **📋 Copy Template** : Salin dan otomatis sesuaikan nama 5 template master dari `_TEMPLATES/`.
-4. **👥 Pasien** : Tambah pasien baru secara satuan atau batch (multi-nama sekaligus) dengan placeholder standar.
-5. **✍️ Isi Dokumen** : Otomasi COM Interop untuk Word (.doc) dan Excel (.xlsx) — memperbarui nomor FPK, jumlah kasus, total biaya, dan tanggal TTD secara otomatis tanpa merusak formula Excel atau tata letak dokumen Word. Dilengkapi pembersihan memori aman (`FinalReleaseComObject`) untuk mencegah resource leak.
-6. **🗜️ Zip Bulan** : Kompresi folder bulan menjadi arsip `.zip` siap kirim BPJS.
-7. **📊 Monitoring** : Pohon status arsip interaktif (*TreeView*) dengan kode warna real-time. Double-click folder pada pohon untuk langsung membuka lokasinya di Windows Explorer.
-
----
-
-## ⚙️ Panduan Menu Terminal CLI (`ProthesaManager.ps1`)
-
-```
-  ╔══════════════════════════════════════════════════════════╗
-  ║   🦷  PROTHESA MANAGER — drg. Danny Hanggono            ║
-  ║       Tools Otomasi Arsip Klaim BPJS                     ║
-  ╚══════════════════════════════════════════════════════════╝
-
-  [1] 📁 Buat Folder Bulan Baru
-  [2] 📋 Copy Template dari Bulan Sebelumnya / _TEMPLATES
-  [3] 👤 Buat Folder Pasien
-  [4] 👥 Batch Buat Folder Pasien
-  [5] 🗜️  ZIP Folder Bulan
-  [6] 🔍 Scan Seluruh Arsip & Simpan Data
-  [7] 📊 Lihat Ringkasan Cepat
-  [8] 📝 Update Isi Template (Word/Excel)
-
-  [0] ❌ Keluar
-```
-
----
-
-## 📁 Struktur Arsip Standar
-
-```
-PROTHESA PRAKTEK WARU/
-├── _TEMPLATES/                         ← Master berkas template mandiri
-│   ├── Administrasi Klaim TEMPLATE.xlsx
-│   ├── REKAP PROTHESA TEMPLATE.doc
-│   ├── SURAT Pengantar ke BPJS klaim TEMPLATE.doc
-│   ├── surat pernyataan KLAIM TAGIHAN TEMPLATE.doc
-│   └── surat pernyataan tidak ada tercecer TEMPLATE.doc
-│
-├── JALANKAN PROTHESA UTIL.bat          ← Launcher GUI WinUtil
-├── JALANKAN MANAGER.bat                ← Launcher CLI Menu
-├── ProthesaWinUtil.ps1                 ← Engine GUI Desktop Modern (WinForms)
-├── ProthesaManager.ps1                 ← Engine CLI & Single-Source Validation
-├── UPDATE-SHORTCUT.ps1                 ← Pembuat shortcut Desktop
-├── README.md                           ← Dokumentasi panduan ini
-│
-├── A=PROTHESA 2024/
-│   ├── 10=PROTHESA OKTOBER 2024/
-│   └── ...
-├── B=PROTHESA 2025/
-│   ├── 1=PROTHESA JANUARI 25/
-│   └── ...
-└── C=PROTHESA 2026/
-    ├── 1=PROTHESA JANUARI 26/
-    │   ├── Administrasi Klaim drg. Danny JANUARI 26.xlsx
-    │   ├── REKAP PROTHESA danny JANUARI 26.doc
-    │   ├── SURAT Pengantar ke BPJS klaim JANUARI 26.doc
-    │   ├── surat pernyataan KLAIM TAGIHAN JANUARI 26.doc
-    │   ├── surat pernyataan tidak ada tercecer JANUARI 26.doc
-    │   └── KLAIM PROTHESA GIGI DRG. DANNY JANUARI 2026/
-    │       ├── BERKAS UMUM JANUARI 26/
-    │       │   ├── 1. BAST JANUARI 25.pdf
-    │       │   └── ... (9 PDF umum non-zero byte)
-    │       └── RJTP-PROTHESA GIGI JANUARI 26/
-    │           ├── 1/
-    │           │   ├── BUKTI LAYANAN [NAMA].pdf
-    │           │   ├── FKPP [NAMA].pdf
-    │           │   └── RESEP PROTHESA [NAMA].pdf
-    │           └── ... (folder pasien)
-    ├── 1=PROTHESA JANUARI 26.zip
-    └── ...
-```
-
----
-
-## ❓ FAQ & Troubleshooting
-
-**Q: Apakah project ini memerlukan Node.js, Python, atau web server?**  
-> **Tidak.** Project ini 100% native PowerShell (.NET WinForms) bawaan Windows. Tidak ada server background, tidak ada port yang dibuka, dan tidak ada file HTML eksternal.
-
-**Q: Bagaimana jika Word atau Excel hang saat auto-update?**  
-> Script telah dilengkapi dengan pembersihan COM Object aman (`FinalReleaseComObject` dan garbage collector ganda). Jika terjadi error tak terduga, proses Word/Excel di latar belakang ditutup secara bersih.
-
-**Q: Apakah data lama akan tertimpa saat membuat bulan baru?**  
-> Tidak. Script memiliki pengaman duplikasi: jika file atau folder sudah ada, script akan melewatinya (*skip*) dan tidak menimpa data yang telah dikerjakan.
-
----
-
-*Dikembangkan untuk efisiensi dan otomasi arsip klaim prothesa gigi drg. Danny Hanggono.*
+*Dikembangkan oleh Ridwan Gatro (RidTheWann) untuk efisiensi arsip klaim prothesa gigi drg. Danny Hanggono.*
