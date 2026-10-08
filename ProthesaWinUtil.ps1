@@ -58,32 +58,33 @@ if ($env:PROTHESA_ALLOW_PORTABLE -ne '1') {
 
 function Col { param([string]$hex) [System.Drawing.ColorTranslator]::FromHtml($hex) }
 
-# Sleek Obsidian / Slate Dark Theme Palette
-$c_bg            = Col('#0B0F17')
-$c_bg2           = Col('#111827')
-$c_bg3           = Col('#1E293B')
-$c_card          = Col('#151D2A')
-$c_cardHover     = Col('#1A2434')
-$c_line          = Col('#243042')
-$c_lineDark      = Col('#1B2433')
-$c_text          = Col('#F8FAFC')
-$c_dim           = Col('#94A3B8')
-$c_muted         = Col('#64748B')
+# Flat dark netral pekat + satu aksen biru (modern, minimal).
+# Warna hanya bermakna status: biru = info/siap, hijau = ok, kuning = sibuk/waspada, merah = error.
+$c_bg            = Col('#1E1E1E')
+$c_bg2           = Col('#252526')
+$c_bg3           = Col('#2D2D30')
+$c_card          = Col('#252526')
+$c_cardHover     = Col('#383838')
+$c_line          = Col('#3E3E42')
+$c_lineDark      = Col('#2D2D30')
+$c_text          = Col('#E8E8E8')
+$c_dim           = Col('#A6A6A6')
+$c_muted         = Col('#767676')
 
-# Semantic Accent Colors
-$c_blue          = Col('#38BDF8')
-$c_blueDark      = Col('#0284C7')
+# Satu aksen + warna status (dipakai hemat, bukan dekorasi)
+$c_blue          = Col('#4C9BE8')
+$c_blueDark      = Col('#0E639C')
 $c_purple        = Col('#A78BFA')
 $c_teal          = Col('#2DD4BF')
-$c_green         = Col('#34D399')
-$c_greenDark     = Col('#059669')
-$c_red           = Col('#F87171')
-$c_redDark       = Col('#DC2626')
-$c_orange        = Col('#FB923C')
-$c_cyan          = Col('#38BDF8')
+$c_green         = Col('#3BA55D')
+$c_greenDark     = Col('#2D7D46')
+$c_red           = Col('#ED4245')
+$c_redDark       = Col('#A12D2F')
+$c_orange        = Col('#E8A33D')
+$c_cyan          = Col('#B5B5B5')
 $c_pink          = Col('#F472B6')
-$c_amber         = Col('#FBBF24')
-$c_gray          = Col('#64748B')
+$c_amber         = Col('#E8A33D')
+$c_gray          = Col('#808080')
 
 $colorMap = @{
     'Black' = '#0E0F12'; 'White' = '#F8FAFC'; 'Gray' = '#94A3B8'; 'DarkGray' = '#64748B'
@@ -94,6 +95,63 @@ $colorMap = @{
 }
 
 function Lighten { param([System.Drawing.Color]$Col, [int]$Amt = 18) [System.Drawing.Color]::FromArgb([Math]::Min(255, $Col.R + $Amt), [Math]::Min(255, $Col.G + $Amt), [Math]::Min(255, $Col.B + $Amt)) }
+
+function Set-Rounded {    <#
+    .SYNOPSIS
+    Membuat sudut kontrol membulat (modern) via Region. Panggil SETELAH ukuran final.
+    #>
+    param($Control, [int]$Radius = 8)
+    try {
+        $w = $Control.Width
+        $h = $Control.Height
+        if ($w -le ($Radius * 2) -or $h -le ($Radius * 2)) { return }
+        $d = $Radius * 2
+        $p = New-Object System.Drawing.Drawing2D.GraphicsPath
+        $p.AddArc(0, 0, $d, $d, 180, 90)
+        $p.AddArc($w - $d - 1, 0, $d, $d, 270, 90)
+        $p.AddArc($w - $d - 1, $h - $d - 1, $d, $d, 0, 90)
+        $p.AddArc(0, $h - $d - 1, $d, $d, 90, 90)
+        $p.CloseFigure()
+        $Control.Region = New-Object System.Drawing.Region($p)
+        $p.Dispose()
+    } catch { }
+}
+
+try {
+    if (-not ([System.Management.Automation.PSTypeName]'ProthesaTheme').Type) {
+        Add-Type -TypeDefinition @'
+        using System;
+        using System.Runtime.InteropServices;
+        public class ProthesaTheme {
+            [DllImport("dwmapi.dll")]
+            public static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int val, int sz);
+            [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+            public static extern int SetWindowTheme(IntPtr h, string a, string b);
+        }
+'@ -ErrorAction SilentlyContinue
+    }
+} catch { }
+
+function Enable-DarkChrome {
+    <#
+    .SYNOPSIS
+    Titlebar gelap (DWM) untuk form; scrollbar gelap (uxtheme) untuk panel scroll.
+    PENTING: jangan pernah SetWindowTheme di handle form — itu menonaktifkan
+    visual styles dan seluruh jendela jatuh ke gaya klasik.
+    API resmi Win10 1809+; gagal diam-diam di OS lama.
+    #>
+    param($Control, [switch]$TitleBar)
+    try {
+        $h = $Control.Handle
+        if ($TitleBar) {
+            $on = 1
+            [void][ProthesaTheme]::DwmSetWindowAttribute($h, 20, [ref]$on, 4)
+        }
+        else {
+            [void][ProthesaTheme]::SetWindowTheme($h, 'DarkMode_Explorer', $null)
+        }
+    } catch { }
+}
 
 function Fui { param([single]$Size, [bool]$Bold = $false) New-Object System.Drawing.Font('Segoe UI', $Size, $(if ($Bold) { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }), [System.Drawing.GraphicsUnit]::Point) }
 function Femo { param([single]$Size, [bool]$Bold = $false) New-Object System.Drawing.Font('Segoe UI Emoji', $Size, $(if ($Bold) { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }), [System.Drawing.GraphicsUnit]::Point) }
@@ -114,14 +172,25 @@ function New-Lbl {
 $Script:AllButtons = New-Object System.Collections.ArrayList
 
 function New-Btn {
-    param([string]$Text, [System.Drawing.Color]$Bg, [int]$W = 200, [int]$H = 40)
+    param([string]$Text, [System.Drawing.Color]$Bg, [int]$W = 200, [int]$H = 46, [switch]$Ghost)
     $b = New-Object System.Windows.Forms.Button
     $b.Text = $Text
-    $b.Font = Fui 10 $true
-    $b.BackColor = $Bg
-    $b.ForeColor = [System.Drawing.Color]::White
-    $b.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-    $b.FlatAppearance.BorderSize = 0
+    $b.Font = Fui 10.5 $true
+    if ($Ghost) {
+        $b.BackColor = $c_bg3
+        $b.ForeColor = $c_text
+        $b.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+        $b.FlatAppearance.BorderSize = 1
+        $b.FlatAppearance.BorderColor = $c_line
+        $b.Tag = $c_bg3
+    }
+    else {
+        $b.BackColor = $Bg
+        $b.ForeColor = [System.Drawing.Color]::White
+        $b.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+        $b.FlatAppearance.BorderSize = 0
+        $b.Tag = $Bg
+    }
     $b.Cursor = [System.Windows.Forms.Cursors]::Hand
     $b.Width = $W
     $b.Height = $H
@@ -129,10 +198,11 @@ function New-Btn {
     $b.UseCompatibleTextRendering = $false
     $b.UseVisualStyleBackColor = $false
     $b.Margin = New-Object System.Windows.Forms.Padding(0, 6, 0, 4)
-    $b.Tag = $Bg
-    $b.Add_MouseEnter({ $this.BackColor = Lighten ([System.Drawing.Color]$this.Tag) 18 })
+    if (-not $Ghost) { $b.Tag = $Bg }
+    $b.Add_MouseEnter({ $this.BackColor = Lighten ([System.Drawing.Color]$this.Tag) 14 })
     $b.Add_MouseLeave({ $this.BackColor = [System.Drawing.Color]$this.Tag })
     [void]$Script:AllButtons.Add($b)
+    Set-Rounded $b 7
     return $b
 }
 
@@ -143,7 +213,7 @@ function New-Box {
     $t.Height = $H
     $t.Font = Fui $Size
     $t.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-    $t.BackColor = Col('#0F1522')
+    $t.BackColor = Col('#2A2A2A')
     $t.ForeColor = $c_text
     $t.Margin = New-Object System.Windows.Forms.Padding(0, 4, 0, 4)
     $t.Tag = $Placeholder
@@ -168,18 +238,35 @@ function Get-Box {
 }
 
 function New-YearBox {
-    $n = New-Object System.Windows.Forms.NumericUpDown
-    $n.Minimum = 2024
-    $n.Maximum = 2040
-    $n.Value = (Get-Date).Year
+    $n = New-Object System.Windows.Forms.ComboBox
+    $n.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+    $n.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $n.BackColor = Col('#2A2A2A')
+    $n.ForeColor = $c_text
+    $n.Font = Fui 10.5 $true
     $n.Width = 110
     $n.Height = 34
-    $n.BackColor = Col('#0F1522')
-    $n.ForeColor = $c_text
-    $n.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-    $n.Font = Fui 10.5 $true
     $n.Margin = New-Object System.Windows.Forms.Padding(0, 4, 0, 4)
+    2024..2040 | ForEach-Object { [void]$n.Items.Add($_) }
+    $nowYear = (Get-Date).Year
+    if ($nowYear -lt 2024) { $nowYear = 2024 }
+    if ($nowYear -gt 2040) { $nowYear = 2040 }
+    $n.SelectedItem = $nowYear
     return $n
+}
+
+function Get-YearVal {
+    <#
+    .SYNOPSIS
+    Ambil tahun sebagai int dari ComboBox tahun (atau NumericUpDown lama).
+    #>
+    param($Box)
+    if ($Box -is [System.Windows.Forms.ComboBox]) {
+        $sel = $Box.SelectedItem
+        if ($null -eq $sel) { $sel = $Box.Text }
+        return [int]$sel
+    }
+    return [int]$Box.Value
 }
 
 function New-Drop {
@@ -187,7 +274,7 @@ function New-Drop {
     $d = New-Object System.Windows.Forms.ComboBox
     $d.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
     $d.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-    $d.BackColor = Col('#0F1522')
+    $d.BackColor = Col('#2A2A2A')
     $d.ForeColor = $c_text
     $d.Height = 34
     $d.Width = $W
@@ -221,40 +308,32 @@ function New-Sep {
 }
 
 function New-Card {
-    param([string]$Title, [System.Drawing.Color]$Accent, [int]$W = 980, [string]$Sub = '')
+    param([string]$Title, [System.Drawing.Color]$Accent, [int]$W = 1080, [string]$Sub = '')
     $f = New-Object System.Windows.Forms.FlowLayoutPanel
     $f.Width = $W
     $f.Height = 200
     $f.BackColor = $c_card
-    $f.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+    $f.BorderStyle = [System.Windows.Forms.BorderStyle]::None
     $f.FlowDirection = [System.Windows.Forms.FlowDirection]::TopDown
     $f.WrapContents = $false
     $f.AutoScroll = $false
-    $f.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 18)
-    $f.Padding = New-Object System.Windows.Forms.Padding(0, 0, 0, 10)
-
-    # Sleek 2px colored top accent line
-    $strip = New-Object System.Windows.Forms.Panel
-    $strip.Height = 2
-    $strip.Width = $W
-    $strip.BackColor = $Accent
-    $strip.Margin = New-Object System.Windows.Forms.Padding(0)
-    [void]$f.Controls.Add($strip)
+    $f.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 26)
+    $f.Padding = New-Object System.Windows.Forms.Padding(4, 4, 4, 14)
 
     # Header section
     $hdr = New-Object System.Windows.Forms.Panel
-    $hdr.Width = $W - 4
-    $hdr.Height = if ($Sub) { 52 } else { 40 }
+    $hdr.Width = $W - 8
+    $hdr.Height = if ($Sub) { 62 } else { 48 }
     $hdr.BackColor = [System.Drawing.Color]::Transparent
     $hdr.Margin = New-Object System.Windows.Forms.Padding(0)
 
-    $head = New-Lbl $Title 13 $c_text $true
-    $head.Location = New-Object System.Drawing.Point(22, 10)
+    $head = New-Lbl $Title 14 $c_text $true
+    $head.Location = New-Object System.Drawing.Point(24, 10)
     [void]$hdr.Controls.Add($head)
 
     if ($Sub) {
-        $s = New-Lbl $Sub 9 $c_dim
-        $s.Location = New-Object System.Drawing.Point(22, 31)
+        $s = New-Lbl $Sub 9.5 $c_dim
+        $s.Location = New-Object System.Drawing.Point(24, 35)
         [void]$hdr.Controls.Add($s)
     }
     [void]$f.Controls.Add($hdr)
@@ -274,24 +353,25 @@ function Fit-Card {
         if ($b -gt $m) { $m = $b }
     }
     $Card.Height = $m + 16
+    Set-Rounded $Card 10
 }
 
 function Add-CardRow {
     param($Flow, [string]$Label, $Control, [int]$LabelW = 180)
     $wrap = New-Object System.Windows.Forms.Panel
-    $wrap.Width = $Flow.Width - 44
-    $wrap.Height = 42
+    $wrap.Width = $Flow.Width - 48
+    $wrap.Height = 50
     $wrap.BackColor = [System.Drawing.Color]::Transparent
-    $wrap.Margin = New-Object System.Windows.Forms.Padding(22, 3, 0, 4)
+    $wrap.Margin = New-Object System.Windows.Forms.Padding(24, 4, 0, 5)
     if ($Label) {
-        $lbl = New-Lbl $Label 10 $c_text $true
+        $lbl = New-Lbl $Label 10.5 $c_text $true
         $lbl.Margin = New-Object System.Windows.Forms.Padding(0)
-        $lbl.Location = New-Object System.Drawing.Point(0, 9)
+        $lbl.Location = New-Object System.Drawing.Point(0, 12)
         [void]$wrap.Controls.Add($lbl)
-        $Control.Location = New-Object System.Drawing.Point($LabelW, 2)
+        $Control.Location = New-Object System.Drawing.Point($LabelW, 5)
     }
     else {
-        $Control.Location = New-Object System.Drawing.Point(0, 2)
+        $Control.Location = New-Object System.Drawing.Point(0, 5)
     }
     [void]$wrap.Controls.Add($Control)
     [void]$Flow.Controls.Add($wrap)
@@ -299,23 +379,24 @@ function Add-CardRow {
 
 function Add-Note {
     param($Flow, [string]$Text, [System.Drawing.Color]$Color = $c_dim)
-    $l = New-Lbl $Text 9.5 $Color
-    $l.Margin = New-Object System.Windows.Forms.Padding(20, 2, 0, 8)
+    $l = New-Lbl $Text 10 $Color
+    $l.Margin = New-Object System.Windows.Forms.Padding(24, 4, 0, 10)
     [void]$Flow.Controls.Add($l)
 }
 
 function Add-ButtonRow {
     param($Flow, [object[]]$Buttons, [int]$BtnW = 180, [int]$BtnH = 42)
     $wrap = New-Object System.Windows.Forms.Panel
-    $wrap.Width = $Flow.Width - 44
-    $wrap.Height = $BtnH + 12
+    $wrap.Width = $Flow.Width - 48
+    $wrap.Height = $BtnH + 18
     $wrap.BackColor = [System.Drawing.Color]::Transparent
-    $wrap.Margin = New-Object System.Windows.Forms.Padding(20, 6, 0, 8)
+    $wrap.Margin = New-Object System.Windows.Forms.Padding(22, 8, 0, 10)
     $x = 0
     foreach ($b in $Buttons) {
         $b.Width = $BtnW
         $b.Height = $BtnH
         $b.Location = New-Object System.Drawing.Point($x, 4)
+        Set-Rounded $b 7
         [void]$wrap.Controls.Add($b)
         $x += $BtnW + 16
     }
@@ -329,11 +410,6 @@ function Set-Busy {
     foreach ($b in $Script:AllButtons) {
         $b.Enabled = -not $Busy
         $b.Cursor = $cursor
-    }
-    if ($Script:StatusBadge) {
-        $Script:StatusBadge.Text = if ($Busy) { 'MEMPROSES' } else { 'SIAP' }
-        $Script:StatusBadge.ForeColor = if ($Busy) { $c_amber } else { $c_green }
-        $Script:StatusBadge.BackColor = if ($Busy) { Col('#451A03') } else { Col('#064E3B') }
     }
 }
 
@@ -513,12 +589,12 @@ function Show-FirstRunWizard {
     $box = New-Object System.Windows.Forms.TextBox
     $box.Text = $Script:BasePath
     $box.ReadOnly = $true
-    $box.BackColor = Col('#0F1522')
+    $box.BackColor = Col('#2A2A2A')
     $box.ForeColor = $c_text
     $box.Width = 360
     $box.Location = New-Object System.Drawing.Point(20, 114)
     [void]$dlg.Controls.Add($box)
-    $btnBrowse = New-Btn 'Pilih...' $c_blueDark 120 30
+    $btnBrowse = New-Btn 'Pilih...' $c_gray 120 30 -Ghost
     $btnBrowse.Location = New-Object System.Drawing.Point(388, 112)
     $btnBrowse.Add_Click({
         $f = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -531,7 +607,7 @@ function Show-FirstRunWizard {
     $note.Location = New-Object System.Drawing.Point(20, 152)
     $note.Width = 480
     [void]$dlg.Controls.Add($note)
-    $btnUse = New-Btn 'Gunakan Folder Ini' $c_greenDark 220 38
+    $btnUse = New-Btn 'Gunakan Folder Ini' $c_blueDark 220 38
     $btnUse.Location = New-Object System.Drawing.Point(20, 190)
     $btnUse.Add_Click({
         $Script:BasePath = $box.Text
@@ -541,7 +617,7 @@ function Show-FirstRunWizard {
         $dlg.Close()
     })
     [void]$dlg.Controls.Add($btnUse)
-    $btnDemo = New-Btn 'Buat Bulan Berjalan' $c_blueDark 220 38
+    $btnDemo = New-Btn 'Buat Bulan Berjalan' $c_gray 220 38 -Ghost
     $btnDemo.Location = New-Object System.Drawing.Point(268, 190)
     $btnDemo.Add_Click({
         $Script:BasePath = $box.Text
@@ -561,7 +637,7 @@ function Show-FirstRunWizard {
         if (Get-Command Find-ProthesaBundle -ErrorAction SilentlyContinue) { $sampleInfo = Find-ProthesaBundle }
     } catch { $sampleInfo = $null }
     if ($sampleInfo) {
-        $btnSample = New-Btn ('Pasang Data Contoh (' + $sampleInfo.Name + ')') $c_teal 460 34
+        $btnSample = New-Btn ('Pasang Data Contoh (' + $sampleInfo.Name + ')') $c_gray 460 34 -Ghost
         $btnSample.Location = New-Object System.Drawing.Point(20, 244)
         $btnSample.Add_Click({
             try {
@@ -576,7 +652,7 @@ function Show-FirstRunWizard {
         })
         [void]$dlg.Controls.Add($btnSample)
     }
-    $btnSkip = New-Btn 'Lewati (Mode Kosong)' $c_gray 460 34
+    $btnSkip = New-Btn 'Lewati (Mode Kosong)' $c_gray 460 34 -Ghost
     $btnSkip.Location = New-Object System.Drawing.Point(20, $(if ($sampleInfo) { 286 } else { 244 }))
     $btnSkip.Add_Click({ $dlg.DialogResult = [System.Windows.Forms.DialogResult]::Cancel; $dlg.Close() })
     [void]$dlg.Controls.Add($btnSkip)
@@ -587,7 +663,7 @@ function Show-FirstRunWizard {
 function Get-YM {
     param($YearBox, $MonthCombo)
     if (-not $YearBox -or -not $MonthCombo) { return $null }
-    $y = [int]$YearBox.Value
+    $y = Get-YearVal $YearBox
     $m = $MonthCombo.SelectedIndex + 1
     if ($m -lt 1 -or $m -gt 12) { Add-Log 'Bulan tidak valid.' 'Red'; return $null }
     return @($y, $m)
@@ -596,7 +672,7 @@ function Get-YM {
 function Update-PeriodLabel {
     if (-not $Script:LblPeriod) { return }
     if (-not $Script:YearBox -or -not $Script:MonthCombo) { return }
-    $y = [int]$Script:YearBox.Value
+    $y = Get-YearVal $Script:YearBox
     $m = $Script:MonthCombo.SelectedIndex + 1
     if ($m -lt 1 -or $m -gt 12) {
         $Script:LblPeriod.Text = 'Bulan tidak valid'
@@ -617,7 +693,7 @@ function Update-PeriodLabel {
     $Script:LblPeriod.Text = ('{0}: {1}' -f (Split-Path -Leaf $mp), $st)
     $Script:LblPeriod.ForeColor = switch ($code) {
         'complete'     { $c_green }
-        'ready_to_zip' { $c_teal }
+        'ready_to_zip' { $c_blue }
         'in_progress'  { $c_orange }
         default        { $c_dim }
     }
@@ -765,7 +841,7 @@ function Refresh-Tree {
             $mn = New-Object System.Windows.Forms.TreeNode($label)
             $mn.Tag = $mo.Full
             if ($mo.StatusCode -eq 'complete') { $mn.ForeColor = $c_green }
-            elseif ($mo.StatusCode -eq 'ready_to_zip') { $mn.ForeColor = $c_teal }
+            elseif ($mo.StatusCode -eq 'ready_to_zip') { $mn.ForeColor = $c_blue }
             elseif ($mo.StatusCode -eq 'in_progress') { $mn.ForeColor = $c_orange }
             else { $mn.ForeColor = $c_dim }
             [void]$tn.Nodes.Add($mn)
@@ -1012,7 +1088,6 @@ function Select-Tab {
             $nb.Btn.BackColor = $c_bg3
             if ($nb.WrapBox) { $nb.WrapBox.BackColor = $c_bg3 }
             $nb.Btn.ForeColor = [System.Drawing.Color]::White
-            $nb.Btn.Font = Fui 10 $true
             $nb.Bar.Visible = $true
             $nb.Bar.BringToFront()
         }
@@ -1020,7 +1095,6 @@ function Select-Tab {
             $nb.Btn.BackColor = $c_bg2
             if ($nb.WrapBox) { $nb.WrapBox.BackColor = $c_bg2 }
             $nb.Btn.ForeColor = $c_dim
-            $nb.Btn.Font = Fui 10 $false
             $nb.Bar.Visible = $false
         }
     }
@@ -1053,37 +1127,47 @@ function Build-Main {
     # ==================== TOP HEADER ====================
     $header = New-Object System.Windows.Forms.Panel
     $header.Dock = [System.Windows.Forms.DockStyle]::Top
-    $header.Height = 64
+    $header.Height = 80
     $header.BackColor = $c_bg2
 
     $title = New-Object System.Windows.Forms.Label
     $title.Text = 'PROTHESA UTIL'
-    $title.Font = Fui 14 $true
+    $title.Font = Fui 17 $true
     $title.ForeColor = [System.Drawing.Color]::White
     $title.AutoSize = $true
-    $title.Location = New-Object System.Drawing.Point(24, 12)
+    $title.Location = New-Object System.Drawing.Point(26, 14)
     [void]$header.Controls.Add($title)
 
-    $statusBadge = New-Object System.Windows.Forms.Label
-    $statusBadge.Text = 'SIAP'
-    $statusBadge.Font = Fui 8.5 $true
-    $statusBadge.ForeColor = $c_green
-    $statusBadge.BackColor = Col('#064E3B')
-    $statusBadge.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-    $statusBadge.AutoSize = $true
-    $statusBadge.Padding = New-Object System.Windows.Forms.Padding(6, 2, 6, 2)
-    $statusBadge.Location = New-Object System.Drawing.Point(175, 14)
-    [void]$header.Controls.Add($statusBadge)
-    $Script:StatusBadge = $statusBadge
-
     $sub = New-Object System.Windows.Forms.Label
-    $sub.Text = 'Tools Otomasi Arsip Klaim BPJS - drg. Danny Hanggono (Praktek Waru)'
-    $sub.Font = Fui 9
+    $sub.Text = 'Arsip klaim BPJS Gigi - drg. Danny Hanggono'
+    $sub.Font = Fui 9.5
     $sub.ForeColor = $c_dim
     $sub.AutoSize = $true
-    $sub.Location = New-Object System.Drawing.Point(26, 38)
+    $sub.Location = New-Object System.Drawing.Point(28, 50)
     [void]$header.Controls.Add($sub)
     $Script:HeaderSub = $sub
+
+    # ---- Periode kerja bersama (satu pilihan untuk semua tombol) ----
+    $periodLbl = New-Lbl 'Bulan kerja:' 10 $c_dim $false
+    $periodLbl.Location = New-Object System.Drawing.Point(360, 24)
+    [void]$header.Controls.Add($periodLbl)
+
+    $Script:YearBox = New-YearBox
+    $Script:YearBox.Location = New-Object System.Drawing.Point(460, 16)
+    [void]$header.Controls.Add($Script:YearBox)
+
+    $Script:MonthCombo = New-Drop $Script:MonthItems 240
+    $Script:MonthCombo.Location = New-Object System.Drawing.Point(582, 16)
+    $Script:MonthCombo.SelectedIndex = (Get-Date).Month - 1
+    [void]$header.Controls.Add($Script:MonthCombo)
+
+    $Script:LblPeriod = New-Lbl '' 9 $c_dim
+    $Script:LblPeriod.Location = New-Object System.Drawing.Point(460, 50)
+    $Script:LblPeriod.AutoSize = $true
+    [void]$header.Controls.Add($Script:LblPeriod)
+
+    $Script:YearBox.Add_SelectedIndexChanged({ Update-PeriodLabel })
+    $Script:MonthCombo.Add_SelectedIndexChanged({ Update-PeriodLabel })
 
     $headerSep = New-Object System.Windows.Forms.Panel
     $headerSep.Dock = [System.Windows.Forms.DockStyle]::Bottom
@@ -1096,76 +1180,48 @@ function Build-Main {
     $right.Width = 280
     $right.BackColor = $c_bg2
 
-    $btnRefresh = New-Btn 'Refresh Data' $c_blueDark 130 36
+    $btnRefresh = New-Btn 'Refresh Data' $c_blueDark 130 40
     $btnRefresh.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
-    $btnRefresh.Location = New-Object System.Drawing.Point(30, 14)
+    $btnRefresh.Location = New-Object System.Drawing.Point(30, 20)
     $btnRefresh.Add_Click({ Refresh-Stats; Add-Log 'Refresh data selesai.' 'Cyan' })
     [void]$right.Controls.Add($btnRefresh)
 
-    $btnQuit = New-Btn 'Keluar' $c_redDark 90 36
+    $btnQuit = New-Btn 'Keluar' $c_gray 90 40 -Ghost
+    $btnQuit.ForeColor = Col('#E06C6C')
     $btnQuit.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
-    $btnQuit.Location = New-Object System.Drawing.Point(170, 14)
+    $btnQuit.Location = New-Object System.Drawing.Point(170, 20)
     $btnQuit.Add_Click({ $Script:Form.Close() })
     [void]$right.Controls.Add($btnQuit)
 
     [void]$header.Controls.Add($right)
 
-    # ==================== LEFT SIDEBAR ====================
+    # ==================== ICON RAIL (ala activity bar) ====================
     $side = New-Object System.Windows.Forms.Panel
     $side.Dock = [System.Windows.Forms.DockStyle]::Left
-    $side.Width = 230
+    $side.Width = 64
     $side.BackColor = $c_bg2
 
-    $brandPanel = New-Object System.Windows.Forms.Panel
-    $brandPanel.Left = 0
-    $brandPanel.Top = 0
-    $brandPanel.Width = 230
-    $brandPanel.Height = 72
-    $brandPanel.BackColor = $c_bg2
-
-    $sideBrand = New-Object System.Windows.Forms.Label
-    $sideBrand.Text = 'PROTHESA'
-    $sideBrand.Font = Fui 13 $true
-    $sideBrand.ForeColor = $c_blue
-    $sideBrand.Location = New-Object System.Drawing.Point(20, 14)
-    $sideBrand.AutoSize = $true
-    [void]$brandPanel.Controls.Add($sideBrand)
-
-    $sideSub = New-Object System.Windows.Forms.Label
-    $sideSub.Text = 'Klaim BPJS Gigi - drg. Danny'
-    $sideSub.Font = Fui 8.5
-    $sideSub.ForeColor = $c_dim
-    $sideSub.Location = New-Object System.Drawing.Point(21, 38)
-    $sideSub.AutoSize = $true
-    [void]$brandPanel.Controls.Add($sideSub)
-
-    $sideSep = New-Object System.Windows.Forms.Panel
-    $sideSep.Height = 1
-    $sideSep.Width = 196
-    $sideSep.BackColor = $c_line
-    $sideSep.Location = New-Object System.Drawing.Point(17, 65)
-    [void]$brandPanel.Controls.Add($sideSep)
-
-    [void]$side.Controls.Add($brandPanel)
+    $Script:ToolTip = New-Object System.Windows.Forms.ToolTip
+    $navIconFont = New-Object System.Drawing.Font('Segoe MDL2 Assets', 17)
 
     # ==================== BOTTOM CONSOLE ====================
     $consoleWrap = New-Object System.Windows.Forms.Panel
     $consoleWrap.Dock = [System.Windows.Forms.DockStyle]::Bottom
-    $consoleWrap.Height = 96
-    $consoleWrap.BackColor = Col('#070A0F')
+    $consoleWrap.Height = 124
+    $consoleWrap.BackColor = Col('#1A1A1A')
     $Script:ConsoleWrap = $consoleWrap
 
     $consoleBar = New-Object System.Windows.Forms.Panel
     $consoleBar.Dock = [System.Windows.Forms.DockStyle]::Top
-    $consoleBar.Height = 28
+    $consoleBar.Height = 32
     $consoleBar.BackColor = $c_bg2
 
-    $consoleTitle = New-Lbl 'LOG SISTEM' 8.5 $c_dim $true
-    $consoleTitle.Location = New-Object System.Drawing.Point(14, 6)
+    $consoleTitle = New-Lbl 'LOG SISTEM' 9 $c_dim $true
+    $consoleTitle.Location = New-Object System.Drawing.Point(16, 8)
     [void]$consoleBar.Controls.Add($consoleTitle)
 
-    $Script:ConsoleTicker = New-Lbl 'Prothesa Util siap.' 8.5 $c_muted
-    $Script:ConsoleTicker.Location = New-Object System.Drawing.Point(110, 6)
+    $Script:ConsoleTicker = New-Lbl 'Prothesa Util siap.' 9 $c_muted
+    $Script:ConsoleTicker.Location = New-Object System.Drawing.Point(120, 8)
     $Script:ConsoleTicker.AutoSize = $true
     [void]$consoleBar.Controls.Add($Script:ConsoleTicker)
 
@@ -1182,12 +1238,12 @@ function Build-Main {
     $btnToggleLog.Width = 75
     $btnToggleLog.Height = 24
     $btnToggleLog.Add_Click({
-        if ($Script:ConsoleWrap.Height -gt 35) {
-            $Script:ConsoleWrap.Height = 28
+        if ($Script:ConsoleWrap.Height -gt 40) {
+            $Script:ConsoleWrap.Height = 32
             $btnToggleLog.Text = 'Buka Log'
         }
         else {
-            $Script:ConsoleWrap.Height = 110
+            $Script:ConsoleWrap.Height = 160
             $btnToggleLog.Text = 'Kecilkan'
         }
     })
@@ -1230,56 +1286,22 @@ function Build-Main {
 
     $console = New-Object System.Windows.Forms.RichTextBox
     $console.Dock = [System.Windows.Forms.DockStyle]::Fill
-    $console.BackColor = Col('#070A0F')
-    $console.ForeColor = Col('#CBD5E1')
-    $console.Font = New-Object System.Drawing.Font('Consolas', 9)
+    $console.BackColor = Col('#1A1A1A')
+    $console.ForeColor = Col('#D4D4D4')
+    $console.Font = New-Object System.Drawing.Font('Consolas', 10)
     $console.ReadOnly = $true
     $console.BorderStyle = [System.Windows.Forms.BorderStyle]::None
     $console.ScrollBars = [System.Windows.Forms.RichTextBoxScrollBars]::Both
 
     [void]$consoleWrap.Controls.Add($console)
     [void]$consoleWrap.Controls.Add($consoleBar)
+    Enable-DarkChrome $console
 
     # ==================== MAIN CONTENT AREA ====================
     $area = New-Object System.Windows.Forms.Panel
     $area.Dock = [System.Windows.Forms.DockStyle]::Fill
     $area.BackColor = $c_bg
     $Script:AreaPanel = $area
-
-    # ---- Bilah periode bersama: satu pilihan bulan kerja untuk semua tab ----
-    $periodBar = New-Object System.Windows.Forms.Panel
-    $periodBar.Dock = [System.Windows.Forms.DockStyle]::Top
-    $periodBar.Height = 48
-    $periodBar.BackColor = $c_bg2
-
-    $periodLbl = New-Lbl 'Bulan kerja:' 10 $c_text $true
-    $periodLbl.Location = New-Object System.Drawing.Point(25, 13)
-    [void]$periodBar.Controls.Add($periodLbl)
-
-    $Script:YearBox = New-YearBox
-    $Script:YearBox.Location = New-Object System.Drawing.Point(130, 7)
-    [void]$periodBar.Controls.Add($Script:YearBox)
-
-    $Script:MonthCombo = New-Drop $Script:MonthItems 240
-    $Script:MonthCombo.Location = New-Object System.Drawing.Point(252, 7)
-    $Script:MonthCombo.SelectedIndex = (Get-Date).Month - 1
-    [void]$periodBar.Controls.Add($Script:MonthCombo)
-
-    $Script:LblPeriod = New-Lbl '' 9.5 $c_dim
-    $Script:LblPeriod.Location = New-Object System.Drawing.Point(510, 14)
-    $Script:LblPeriod.AutoSize = $true
-    [void]$periodBar.Controls.Add($Script:LblPeriod)
-
-    $Script:YearBox.Add_ValueChanged({ Update-PeriodLabel })
-    $Script:MonthCombo.Add_SelectedIndexChanged({ Update-PeriodLabel })
-
-    $periodSep = New-Object System.Windows.Forms.Panel
-    $periodSep.Dock = [System.Windows.Forms.DockStyle]::Bottom
-    $periodSep.Height = 1
-    $periodSep.BackColor = $c_line
-    [void]$periodBar.Controls.Add($periodSep)
-
-    [void]$area.Controls.Add($periodBar)
 
     [void]$form.Controls.Add($area)
     [void]$form.Controls.Add($side)
@@ -1295,13 +1317,14 @@ function Build-Main {
     $Script:NavButtons = @()
 
     $navOrder = @(
-        @{ Key = 'Home';    Label = 'Beranda' }
-        @{ Key = 'Monthly'; Label = 'Siapkan Bulan' }
-        @{ Key = 'Docs';    Label = 'Isi & Arsipkan' }
-        @{ Key = 'Stats';   Label = 'Monitoring' }
+        @{ Key = 'Home';    Label = 'Beranda';       Glyph = [char]0xE80F }
+        @{ Key = 'Monthly'; Label = 'Siapkan Bulan'; Glyph = [char]0xE787 }
+        @{ Key = 'Docs';    Label = 'Isi Arsip';     Glyph = [char]0xE104 }
+        @{ Key = 'Stats';   Label = 'Monitoring';    Glyph = [char]0xE890 }
     )
+    $iconFont = New-Object System.Drawing.Font('Segoe MDL2 Assets', 12)
 
-    $yPos = 80
+    $yPos = 48
     foreach ($def in $navOrder) {
         $page = New-Object System.Windows.Forms.Panel
         $page.Dock = [System.Windows.Forms.DockStyle]::Fill
@@ -1315,20 +1338,21 @@ function Build-Main {
         $wrap.FlowDirection = [System.Windows.Forms.FlowDirection]::TopDown
         $wrap.Padding = New-Object System.Windows.Forms.Padding(25, 20, 25, 25)
         $page.Controls.Add($wrap)
+        Enable-DarkChrome $wrap
 
-        # Nav button item container (Pill style)
+        # Nav icon (activity-bar style)
         $btnWrap = New-Object System.Windows.Forms.Panel
-        $btnWrap.Left = 12
+        $btnWrap.Left = 0
         $btnWrap.Top = $yPos
-        $btnWrap.Width = 206
-        $btnWrap.Height = 42
+        $btnWrap.Width = 64
+        $btnWrap.Height = 60
         $btnWrap.BackColor = $c_bg2
 
         $bar = New-Object System.Windows.Forms.Panel
         $bar.Width = 3
-        $bar.Height = 24
+        $bar.Height = 32
         $bar.Left = 0
-        $bar.Top = 9
+        $bar.Top = 14
         $bar.BackColor = $c_blue
         $bar.Visible = $false
         [void]$btnWrap.Controls.Add($bar)
@@ -1337,23 +1361,23 @@ function Build-Main {
         $btn.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
         $btn.FlatAppearance.BorderSize = 0
         $btn.Cursor = [System.Windows.Forms.Cursors]::Hand
-        $btn.Text = ('   ' + $def.Label)
-        $btn.Font = Fui 10 $false
+        $btn.Text = [string]$def.Glyph
+        $btn.Font = $navIconFont
         $btn.ForeColor = $c_dim
         $btn.BackColor = $c_bg2
         $btn.Left = 0
         $btn.Top = 0
-        $btn.Width = 206
-        $btn.Height = 42
-        $btn.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+        $btn.Width = 64
+        $btn.Height = 60
+        $btn.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
         $btn.UseCompatibleTextRendering = $false
         $btn.UseVisualStyleBackColor = $false
         $btn.Tag = $def.Key
+        $Script:ToolTip.SetToolTip($btn, $def.Label)
 
         # Robust closure-bound click and hover handlers
         $targetKey = $def.Key
         $btnRef = $btn
-        $barRef = $bar
         $wrapRef = $btnWrap
 
         $btn.Add_Click({ Select-Tab $targetKey }.GetNewClosure())
@@ -1361,8 +1385,8 @@ function Build-Main {
 
         $btn.Add_MouseEnter({
             if ($Script:activeTab -ne $targetKey) {
-                $btnRef.BackColor = Col('#1A2434')
-                $wrapRef.BackColor = Col('#1A2434')
+                $btnRef.BackColor = Col('#383838')
+                $wrapRef.BackColor = Col('#383838')
                 $btnRef.ForeColor = [System.Drawing.Color]::White
             }
         }.GetNewClosure())
@@ -1377,6 +1401,8 @@ function Build-Main {
 
         [void]$btnWrap.Controls.Add($btn)
         $bar.BringToFront()
+        Set-Rounded $btnWrap 10
+        Set-Rounded $btn 10
 
         [void]$side.Controls.Add($btnWrap)
         [void]$area.Controls.Add($page)
@@ -1390,17 +1416,8 @@ function Build-Main {
             Wrap = $wrap
         }
         $Script:panels[$def.Key] = $page
-        $yPos += 46
+        $yPos += 64
     }
-
-    $ver = New-Object System.Windows.Forms.Label
-    $ver.Text = 'v2.1.1 | Ridwan Gatro'
-    $ver.Font = Fui 8.5
-    $ver.ForeColor = $c_muted
-    $ver.AutoSize = $true
-    $ver.Anchor = [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Bottom
-    $ver.Location = New-Object System.Drawing.Point(20, 680)
-    [void]$side.Controls.Add($ver)
 
     return $form
 }
@@ -1408,47 +1425,50 @@ function Build-Main {
 function Add-StatRow {
     param($Flow, $Blocks)
     $wrap = New-Object System.Windows.Forms.Panel
-    $wrap.Width = $Flow.Width - 44
-    $wrap.Height = 92
+    $wrap.Width = $Flow.Width - 48
+    $wrap.Height = 86
     $wrap.BackColor = [System.Drawing.Color]::Transparent
-    $wrap.Margin = New-Object System.Windows.Forms.Padding(20, 8, 0, 14)
-    $tileW = 222
-    $tileH = 84
-    $gap = 16
+    $wrap.Margin = New-Object System.Windows.Forms.Padding(22, 10, 0, 16)
+    $colW = 200
     $x = 0
+    $first = $true
     foreach ($blk in $Blocks) {
-        $p = New-Object System.Windows.Forms.Panel
-        $p.Width = $tileW
-        $p.Height = $tileH
-        $p.BackColor = Col('#0F1522')
-        $p.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-        $p.Left = $x
-        $p.Top = 4
+        if (-not $first) {
+            $div = New-Object System.Windows.Forms.Panel
+        $div.Width = 1
+        $div.Height = 64
+            $div.BackColor = $c_line
+            $div.Left = $x
+            $div.Top = 10
+            [void]$wrap.Controls.Add($div)
+            $x += 1
+        }
+        $first = $false
 
-        $topBar = New-Object System.Windows.Forms.Panel
-        $topBar.Height = 2
-        $topBar.Width = $tileW
-        $topBar.BackColor = $blk.Color
-        $topBar.Dock = [System.Windows.Forms.DockStyle]::Top
-        [void]$p.Controls.Add($topBar)
+        $cell = New-Object System.Windows.Forms.Panel
+        $cell.Width = $colW
+        $cell.Height = 86
+        $cell.BackColor = [System.Drawing.Color]::Transparent
+        $cell.Left = $x
+        $cell.Top = 0
+        [void]$wrap.Controls.Add($cell)
 
-        $num = New-Lbl '0' 20 $blk.Color $true
-        $num.Left = 16
-        $num.Top = 12
-        [void]$p.Controls.Add($num)
+        $num = New-Lbl '0' 24 $c_text $true
+        $num.Left = 22
+        $num.Top = 2
+        [void]$cell.Controls.Add($num)
 
-        $cap = New-Lbl $blk.Caption 8.5 $c_dim $true
-        $cap.Left = 18
-        $cap.Top = 54
-        [void]$p.Controls.Add($cap)
+        $cap = New-Lbl $blk.Caption 10.5 $c_dim $false
+        $cap.Left = 24
+        $cap.Top = 58
+        [void]$cell.Controls.Add($cap)
 
         if ($blk.Caption -eq 'Tahun')    { $Script:LblYears = $num }
         if ($blk.Caption -eq 'Bulan')    { $Script:LblMonths = $num }
         if ($blk.Caption -eq 'Pasien')   { $Script:LblPatients = $num }
         if ($blk.Caption -eq 'Lengkap')  { $Script:LblFull = $num }
 
-        [void]$wrap.Controls.Add($p)
-        $x += $tileW + $gap
+        $x += $colW + 24
     }
     [void]$Flow.Controls.Add($wrap)
     return $wrap
@@ -1470,7 +1490,7 @@ function Build-Tabs {
     $pageHome = $Script:panels['Home']
     $wrapH = $Script:NavButtons | Where-Object Key -eq 'Home' | Select-Object -ExpandProperty Wrap
 
-    $c1 = New-Card 'Ringkasan' $c_blue 980 'Kondisi arsip saat ini'
+    $c1 = New-Card 'Ringkasan' $c_blue 1080 'Kondisi arsip saat ini'
     $statRow = Add-StatRow $c1 @(
         @{ Caption = 'Tahun'; Color = $c_blue }
         @{ Caption = 'Bulan'; Color = $c_teal }
@@ -1480,15 +1500,15 @@ function Build-Tabs {
     Fit-Card $c1
     [void]$wrapH.Controls.Add($c1)
 
-    $c2 = New-Card 'Data Tersimpan Di' $c_green 980 'Folder utama berisi arsip tahunan (A=2024, B=2025, C=2026, dst)'
+    $c2 = New-Card 'Data Tersimpan Di' $c_green 1080 'Folder utama berisi arsip tahunan (A=2024, B=2025, C=2026, dst)'
     $Script:BoxPath = New-Box '' 620 34
     $Script:BoxPath.ReadOnly = $true
     $Script:BoxPath.Text = $Script:BasePath
     $Script:LblPath = $Script:BoxPath
     Add-CardRow $c2 'Lokasi' $Script:BoxPath 140
-    $btnOpen = New-Btn 'Buka Folder' $c_greenDark 200 38
+    $btnOpen = New-Btn 'Buka Folder' $c_blueDark 200 38
     $btnOpen.Add_Click({ Open-Folder $Script:BasePath })
-    $btnChange = New-Btn 'Pindah Lokasi' $c_blueDark 180 38
+    $btnChange = New-Btn 'Pindah Lokasi' $c_gray 180 38 -Ghost
     $btnChange.Add_Click({
         $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
         $dlg.Description = 'Pilih folder tempat arsip prothesa (berisi A=PROTHESA 2024, dll)'
@@ -1505,15 +1525,15 @@ function Build-Tabs {
     Fit-Card $c2
     [void]$wrapH.Controls.Add($c2)
 
-    $c3 = New-Card 'Yang Bisa Dilakukan' $c_blue 980 'Periksa arsip atau mulai kerjakan bulan berjalan'
-    $btnExport = New-Btn 'Periksa Arsip' $c_blueDark 458 40
+    $c3 = New-Card 'Yang Bisa Dilakukan' $c_blue 1080 'Periksa arsip atau mulai kerjakan bulan berjalan'
+    $btnExport = New-Btn 'Periksa Arsip' $c_gray 458 40 -Ghost
     $btnExport.Add_Click({ Invoke-ExportStatus })
-    $btnRing = New-Btn 'Lihat Ringkasan' $c_purple 458 40
+    $btnRing = New-Btn 'Lihat Ringkasan' $c_gray 458 40 -Ghost
     $btnRing.Add_Click({ Show-Ringkasan })
     Add-ButtonRow $c3 @($btnExport, $btnRing) 458 40
-    $btnOpenRoot = New-Btn 'Buka Folder Arsip' $c_teal 458 40
+    $btnOpenRoot = New-Btn 'Buka Folder Arsip' $c_gray 458 40 -Ghost
     $btnOpenRoot.Add_Click({ Open-Folder $Script:BasePath })
-    $btnGoMonthly = New-Btn 'Mulai: Siapkan Bulan' $c_amber 458 40
+    $btnGoMonthly = New-Btn 'Mulai: Siapkan Bulan' $c_blueDark 458 40
     $btnGoMonthly.Add_Click({ Select-Tab 'Monthly' })
     Add-ButtonRow $c3 @($btnOpenRoot, $btnGoMonthly) 458 40
     Fit-Card $c3
@@ -1523,7 +1543,7 @@ function Build-Tabs {
 
     $wrapB = $Script:NavButtons | Where-Object Key -eq 'Monthly' | Select-Object -ExpandProperty Wrap
     Add-Note $wrapB 'Ikuti urutan 1 - 2 - 3 di bawah. Semuanya memakai "Bulan kerja" yang dipilih di atas.' $c_dim
-    $cm = New-Card 'Langkah 1 - Buat Folder Bulan' $c_blue 980 'Dibuatkan otomatis: folder tahun, folder bulan, KLAIM, BERKAS UMUM, RJTP'
+    $cm = New-Card 'Langkah 1 - Buat Folder Bulan' $c_blue 1080 'Dibuatkan otomatis: folder tahun, folder bulan, KLAIM, BERKAS UMUM, RJTP'
     $Script:ChkCopy1 = New-Chk 'Juga salinkan 5 template dokumen'
     Add-CardRow $cm '' $Script:ChkCopy1 0
     $Script:ChkAutoCopy = New-Chk 'Langsung isi otomatis setelah disalin'
@@ -1536,10 +1556,10 @@ function Build-Tabs {
     Fit-Card $cm
     [void]$wrapB.Controls.Add($cm)
 
-    $cc = New-Card 'Langkah 2 - Salin Template Dokumen' $c_purple 980 'Ambil 5 template dari folder _TEMPLATES'
+    $cc = New-Card 'Langkah 2 - Salin Template Dokumen' $c_purple 1080 'Ambil 5 template dari folder _TEMPLATES'
     $Script:ChkAutoCopy2 = New-Chk 'Langsung isi otomatis setelah disalin'
     Add-CardRow $cc '' $Script:ChkAutoCopy2 0
-    $btnCopy = New-Btn 'Salin Template' $c_purple 280 42
+    $btnCopy = New-Btn 'Salin Template' $c_blueDark 280 42
     $btnCopy.Add_Click({ Invoke-CopyTemplate })
     Add-CardRow $cc '' $btnCopy 0
     Add-Note $cc 'Gunakan ini bila Langkah 1 dilewati atau template belum ada.'
@@ -1547,23 +1567,23 @@ function Build-Tabs {
     [void]$wrapB.Controls.Add($cc)
 
     $wrapP = $Script:NavButtons | Where-Object Key -eq 'Monthly' | Select-Object -ExpandProperty Wrap
-    $cp1 = New-Card 'Langkah 3 - Daftarkan Satu Pasien' $c_green 980 'Dibuatkan folder bernomor + 3 form kosong (BUKTI LAYANAN, FKPP, RESEP)'
+    $cp1 = New-Card 'Langkah 3 - Daftarkan Satu Pasien' $c_green 1080 'Dibuatkan folder bernomor + 3 form kosong (BUKTI LAYANAN, FKPP, RESEP)'
     $Script:BoxPasien = New-Box 'Nama pasien (contoh: SITI AMINAH)' 420 34
     Add-CardRow $cp1 'Nama Pasien' $Script:BoxPasien
-    $btnP1 = New-Btn 'Tambah Pasien' $c_greenDark 220 40
+    $btnP1 = New-Btn 'Tambah Pasien' $c_blueDark 220 40
     $btnP1.Add_Click({ Invoke-Patient })
     Add-CardRow $cp1 '' $btnP1 0
     Fit-Card $cp1
     [void]$wrapP.Controls.Add($cp1)
 
-    $cp2 = New-Card 'Langkah 3 - Daftarkan Banyak Pasien Sekaligus' $c_pink 980 'Tulis satu nama tiap baris'
+    $cp2 = New-Card 'Langkah 3 - Daftarkan Banyak Pasien Sekaligus' $c_pink 1080 'Tulis satu nama tiap baris'
     $Script:BoxBatch = New-Object System.Windows.Forms.TextBox
     $Script:BoxBatch.Multiline = $true
     $Script:BoxBatch.Width = 880
     $Script:BoxBatch.Height = 140
     $Script:BoxBatch.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
     $Script:BoxBatch.Font = Fui 10
-    $Script:BoxBatch.BackColor = Col('#0F1522')
+    $Script:BoxBatch.BackColor = Col('#2A2A2A')
     $Script:BoxBatch.ForeColor = $c_text
     $Script:BoxBatch.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
     $Script:BoxBatch.AcceptsReturn = $true
@@ -1574,7 +1594,7 @@ function Build-Tabs {
         $n = @($Script:BoxBatch.Lines | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }).Count
         $Script:LblBatchCount.Text = "$n pasien terdaftar"
     })
-    $btnP2 = New-Btn 'Buat Semua Folder Pasien' $c_pink 280 42
+    $btnP2 = New-Btn 'Buat Semua Folder Pasien' $c_blueDark 280 42
     $btnP2.Add_Click({ Invoke-PatientBatch })
     Add-CardRow $cp2 '' $btnP2 0
     Add-Note $cp2 'File yang dibuat masih kosong - ganti dengan hasil scan PDF asli.'
@@ -1583,7 +1603,7 @@ function Build-Tabs {
 
     $wrapD = $Script:NavButtons | Where-Object Key -eq 'Docs' | Select-Object -ExpandProperty Wrap
     Add-Note $wrapD 'Lanjutan dari tab Siapkan Bulan. Tetap memakai "Bulan kerja" yang sama.' $c_dim
-    $cf = New-Card 'Langkah 4 - Isi Dokumen Otomatis' $c_orange 980 'Word & Excel diisi otomatis: tanggal, FPK, jumlah kasus, biaya'
+    $cf = New-Card 'Langkah 4 - Isi Dokumen Otomatis' $c_orange 1080 'Word & Excel diisi otomatis: tanggal, FPK, jumlah kasus, biaya'
     $Script:BoxTanggal = New-Box 'contoh: 6 Maret 2026' 360 34
     Add-CardRow $cf 'Tanggal TTD' $Script:BoxTanggal
     $Script:BoxFpk = New-Box 'contoh: P2601000026282' 360 34
@@ -1592,23 +1612,23 @@ function Build-Tabs {
     Add-CardRow $cf 'Jumlah Kasus' $Script:BoxKasus
     $Script:BoxBiaya = New-Box 'contoh: 5250000 (tanpa titik)' 280 34
     Add-CardRow $cf 'Total Biaya (Rp)' $Script:BoxBiaya
-    $btnFill = New-Btn 'Isi Dokumen Sekarang' $c_orange 360 42
+    $btnFill = New-Btn 'Isi Dokumen Sekarang' $c_blueDark 360 42
     $btnFill.Add_Click({ Invoke-Update })
     Add-CardRow $cf '' $btnFill 0
     Add-Note $cf 'Butuh Microsoft Word & Excel terpasang di PC ini.'
     Fit-Card $cf
     [void]$wrapD.Controls.Add($cf)
 
-    $cr = New-Card 'Langkah 5 - Samakan Nama Berkas (opsional)' $c_purple 980 'Ubah "1.pdf, 2.pdf, ..." mengikuti nama bulan sebelumnya'
-    $btnRename = New-Btn 'Samakan Nama Berkas' $c_purple 280 42
+    $cr = New-Card 'Langkah 5 - Samakan Nama Berkas (opsional)' $c_purple 1080 'Ubah "1.pdf, 2.pdf, ..." mengikuti nama bulan sebelumnya'
+    $btnRename = New-Btn 'Samakan Nama Berkas' $c_gray 280 42 -Ghost
     $btnRename.Add_Click({ Invoke-RenameGui })
     Add-CardRow $cr '' $btnRename 0
     Add-Note $cr 'Jalankan bila ada file bernomor yang namanya belum lengkap.'
     Fit-Card $cr
     [void]$wrapD.Controls.Add($cr)
 
-    $cz = New-Card 'Langkah 6 - Arsipkan ke ZIP' $c_red 980 'Berkas bulan dipadatkan jadi satu file .zip siap kirim'
-    $btnZip = New-Btn 'Buat ZIP' $c_redDark 260 42
+    $cz = New-Card 'Langkah 6 - Arsipkan ke ZIP' $c_red 1080 'Berkas bulan dipadatkan jadi satu file .zip siap kirim'
+    $btnZip = New-Btn 'Buat ZIP' $c_blueDark 260 42
     $btnZip.Add_Click({ Invoke-Zip })
     Add-CardRow $cz '' $btnZip 0
     Add-Note $cz 'File ZIP tersimpan di samping folder bulan.'
@@ -1616,29 +1636,30 @@ function Build-Tabs {
     [void]$wrapD.Controls.Add($cz)
 
     $wrapS = $Script:NavButtons | Where-Object Key -eq 'Stats' | Select-Object -ExpandProperty Wrap
-    $cs = New-Card 'Periksa Kelengkapan' $c_teal 980 'Pindai arsip dan tandai yang kurang'
-    $btnScan = New-Btn 'Periksa Sekarang' $c_teal 320 40
+    $cs = New-Card 'Periksa Kelengkapan' $c_teal 1080 'Pindai arsip dan tandai yang kurang'
+    $btnScan = New-Btn 'Periksa Sekarang' $c_blueDark 320 40
     $btnScan.Add_Click({ Invoke-ExportStatus })
-    $btnRing2 = New-Btn 'Lihat Ringkasan' $c_purple 320 40
+    $btnRing2 = New-Btn 'Lihat Ringkasan' $c_gray 320 40 -Ghost
     $btnRing2.Add_Click({ Show-Ringkasan })
     Add-ButtonRow $cs @($btnScan, $btnRing2) 320 40
     Fit-Card $cs
     [void]$wrapS.Controls.Add($cs)
 
-    $ct = New-Card 'Status Tiap Bulan' $c_teal 980 'Klik 2x pada baris untuk membuka foldernya'
+    $ct = New-Card 'Status Tiap Bulan' $c_teal 1080 'Klik 2x pada baris untuk membuka foldernya'
     $Script:Tree = New-Object System.Windows.Forms.TreeView
-    $Script:Tree.BackColor = Col('#0F1522')
+    $Script:Tree.BackColor = Col('#2A2A2A')
     $Script:Tree.ForeColor = $c_text
     $Script:Tree.Font = Fui 9.5
     $Script:Tree.BorderStyle = [System.Windows.Forms.BorderStyle]::None
     $Script:Tree.FullRowSelect = $true
-    $Script:Tree.Width = 936
+    $Script:Tree.Width = 1010
     $Script:Tree.Height = 400
     $Script:Tree.Margin = New-Object System.Windows.Forms.Padding(20, 6, 0, 10)
     $Script:Tree.Add_NodeMouseDoubleClick({
         if ($_.Node.Tag) { Open-Folder ([string]$_.Node.Tag) }
     })
     [void]$ct.Controls.Add($Script:Tree)
+    Enable-DarkChrome $Script:Tree
     Fit-Card $ct
     [void]$wrapS.Controls.Add($ct)
 }
@@ -1648,6 +1669,7 @@ Build-Tabs
 $Script:activeTab = ''
 Select-Tab 'Home'
 $form.Add_Shown({
+    Enable-DarkChrome $Script:Form -TitleBar
     Add-Log 'Prothesa Util siap. Pilih menu di sisi kiri.' 'Cyan'
     Add-Log "Base path arsip: $Script:BasePath" 'DarkGray'
     Refresh-Stats
@@ -1680,3 +1702,5 @@ catch {
     }
     catch { }
 }
+
+
