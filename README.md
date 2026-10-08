@@ -99,15 +99,21 @@ Status: `complete` (Lengkap) / `ready_to_zip` (Siap ZIP) / `in_progress` (Belum 
 
 ## Tab GUI
 
-1. **Beranda** — ringkasan tahun/bulan/pasien/lengkap, lokasi arsip, scan + ringkasan teks.
-2. **Buat Bulan** — struktur folder bulan + subfolder KLAIM, BERKAS UMUM, RJTP.
-3. **Copy Template** — salin 5 template master.
-4. **Kelola Pasien** — tambah satuan atau batch + placeholder standar.
-5. **Isi Dokumen** — auto-fill Word/Excel via COM (FPK, kasus, biaya, tanggal TTD, romawi) dengan pelepasan memori aman.
-6. **Kompresi ZIP** — arsip bulan siap kirim.
-7. **Monitoring Arsip** — pohon status interaktif; double-click membuka folder di Explorer.
+Satu pilihan **"Bulan kerja"** di bilah atas berlaku untuk semua tombol.
 
-Menu CLI (`ProthesaManager.ps1`): buat bulan, copy template, pasien satuan/batch, ZIP, scan, ringkasan, update template, keluar.
+1. **Beranda** — ringkasan tahun/bulan/pasien/lengkap, lokasi arsip, scan + ringkasan teks.
+2. **Siapkan Bulan** — Langkah 1 (buat folder bulan), Langkah 2 (salin template), Langkah 3 (daftarkan pasien satuan/batch).
+3. **Isi & Arsipkan** — Langkah 4 (isi dokumen Word/Excel otomatis), Langkah 5 (samakan nama berkas dari bulan sebelumnya, opsional), Langkah 6 (arsipkan ke ZIP).
+4. **Monitoring** — periksa kelengkapan + status tiap bulan; double-click membuka folder di Explorer.
+
+Menu CLI (`ProthesaManager.ps1`): buat bulan, copy template, pasien satuan/batch, ZIP, scan, ringkasan, update template, samakan nama berkas umum dari bulan sebelumnya, keluar.
+
+### Samakan Nama Berkas Umum (menu 9 / `Rename-BerkasUmumFromPrevious`)
+
+File bernomor (`1.pdf`, `2.pdf`, ...) di folder BERKAS UMUM diganti namanya mengikuti
+nama dasar file bernomor sama di bulan sebelumnya yang benar-benar ada (mundur maks 12 bulan).
+Mendukung `-WhatIf` untuk preview. Konflik nama diatasi dengan akhiran ` -copy` / ` -copy(n)`.
+Ekstensi file tujuan dipertahankan secara default (opsi `-KeepSourceExtension` untuk memakai ekstensi sumber).
 
 ---
 

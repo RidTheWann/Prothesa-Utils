@@ -593,6 +593,55 @@ function Get-YM {
     return @($y, $m)
 }
 
+function Update-PeriodLabel {
+    if (-not $Script:LblPeriod) { return }
+    if (-not $Script:YearBox -or -not $Script:MonthCombo) { return }
+    $y = [int]$Script:YearBox.Value
+    $m = $Script:MonthCombo.SelectedIndex + 1
+    if ($m -lt 1 -or $m -gt 12) {
+        $Script:LblPeriod.Text = 'Bulan tidak valid'
+        $Script:LblPeriod.ForeColor = $c_muted
+        return
+    }
+    $mp = $null
+    try { $mp = Get-MonthPath -Year $y -Month $m } catch { $mp = $null }
+    if (-not $mp) {
+        $Script:LblPeriod.Text = ('{0} {1}: belum dibuat' -f $Script:BulanNamesLower[$m], $y)
+        $Script:LblPeriod.ForeColor = $c_muted
+        return
+    }
+    $val = $null
+    try { $val = Test-ProthesaMonthValidation -MonthPath $mp } catch { }
+    $st = if ($val) { $val.StatusText } else { 'Kosong' }
+    $code = if ($val) { $val.StatusCode } else { 'empty' }
+    $Script:LblPeriod.Text = ('{0}: {1}' -f (Split-Path -Leaf $mp), $st)
+    $Script:LblPeriod.ForeColor = switch ($code) {
+        'complete'     { $c_green }
+        'ready_to_zip' { $c_teal }
+        'in_progress'  { $c_orange }
+        default        { $c_dim }
+    }
+}
+
+function Invoke-RenameGui {
+    if ($Script:Busy) { return }
+    $ym = Get-YM $Script:YearBox $Script:MonthCombo
+    if (-not $ym) { return }
+    $tanya = [System.Windows.Forms.MessageBox]::Show(
+        'Samakan nama file bernomor (1.pdf, 2.pdf, ...) pada bulan kerja mengikuti bulan sebelumnya?',
+        'Samakan Nama Berkas',
+        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Question)
+    if ($tanya -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+    Set-Busy $true
+    try {
+        Rename-BerkasUmumFromPrevious -Year $ym[0] -Month $ym[1]
+        Add-Log 'Samakan nama berkas selesai.' 'Green'
+    }
+    catch { Add-Log "Error: $($_.Exception.Message)" 'Red' }
+    finally { Set-Busy $false; Refresh-Stats }
+}
+
 function Open-Folder {
     param([string]$Path)
     if (Test-Path -LiteralPath $Path) {
@@ -676,6 +725,7 @@ function Refresh-Stats {
     if ($Script:LblPatients) { $Script:LblPatients.Text = "$Script:PatientTotal" }
     if ($Script:LblFull) { $Script:LblFull.Text = "$Script:FullTotal" }
     if ($Script:LblPath) { $Script:LblPath.Text = $Script:BasePath }
+    Update-PeriodLabel
 }
 
 function Show-Ringkasan {
@@ -976,13 +1026,10 @@ function Select-Tab {
     }
 
     $tabDesc = @{
-        'Home'    = 'Ringkasan Arsip & Status Data Klaim BPJS Gigi'
-        'Month'   = 'Buat Folder Bulan Baru & Struktur Klaim BPJS'
-        'Copy'    = 'Salin Template Dokumen Master Mandiri _TEMPLATES'
-        'Patient' = 'Pendaftaran Pasien & Batch Generate Folder Pasien'
-        'Fill'    = 'Otomasi Pengisian Dokumen Klaim (Word & Excel)'
-        'Zip'     = 'Kompresi Berkas Klaim Bulan Menjadi Arsip ZIP'
-        'Stats'   = 'Monitoring Arsip, Pohon Status & Validasi Dokumen'
+        'Home'    = 'Ringkasan arsip dan status klaim'
+        'Monthly' = 'Langkah 1-3: siapkan folder bulan, template, dan pasien'
+        'Docs'    = 'Langkah 4-6: isi dokumen, samakan nama, arsipkan ZIP'
+        'Stats'   = 'Periksa kelengkapan dan status tiap bulan'
     }
     if ($Script:HeaderSub -and $tabDesc.ContainsKey($Key)) {
         $Script:HeaderSub.Text = $tabDesc[$Key]
@@ -1199,6 +1246,41 @@ function Build-Main {
     $area.BackColor = $c_bg
     $Script:AreaPanel = $area
 
+    # ---- Bilah periode bersama: satu pilihan bulan kerja untuk semua tab ----
+    $periodBar = New-Object System.Windows.Forms.Panel
+    $periodBar.Dock = [System.Windows.Forms.DockStyle]::Top
+    $periodBar.Height = 48
+    $periodBar.BackColor = $c_bg2
+
+    $periodLbl = New-Lbl 'Bulan kerja:' 10 $c_text $true
+    $periodLbl.Location = New-Object System.Drawing.Point(25, 13)
+    [void]$periodBar.Controls.Add($periodLbl)
+
+    $Script:YearBox = New-YearBox
+    $Script:YearBox.Location = New-Object System.Drawing.Point(130, 7)
+    [void]$periodBar.Controls.Add($Script:YearBox)
+
+    $Script:MonthCombo = New-Drop $Script:MonthItems 240
+    $Script:MonthCombo.Location = New-Object System.Drawing.Point(252, 7)
+    $Script:MonthCombo.SelectedIndex = (Get-Date).Month - 1
+    [void]$periodBar.Controls.Add($Script:MonthCombo)
+
+    $Script:LblPeriod = New-Lbl '' 9.5 $c_dim
+    $Script:LblPeriod.Location = New-Object System.Drawing.Point(510, 14)
+    $Script:LblPeriod.AutoSize = $true
+    [void]$periodBar.Controls.Add($Script:LblPeriod)
+
+    $Script:YearBox.Add_ValueChanged({ Update-PeriodLabel })
+    $Script:MonthCombo.Add_SelectedIndexChanged({ Update-PeriodLabel })
+
+    $periodSep = New-Object System.Windows.Forms.Panel
+    $periodSep.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $periodSep.Height = 1
+    $periodSep.BackColor = $c_line
+    [void]$periodBar.Controls.Add($periodSep)
+
+    [void]$area.Controls.Add($periodBar)
+
     [void]$form.Controls.Add($area)
     [void]$form.Controls.Add($side)
     [void]$form.Controls.Add($consoleWrap)
@@ -1214,12 +1296,9 @@ function Build-Main {
 
     $navOrder = @(
         @{ Key = 'Home';    Label = 'Beranda' }
-        @{ Key = 'Month';   Label = 'Buat Bulan' }
-        @{ Key = 'Copy';    Label = 'Copy Template' }
-        @{ Key = 'Patient'; Label = 'Kelola Pasien' }
-        @{ Key = 'Fill';    Label = 'Isi Dokumen' }
-        @{ Key = 'Zip';     Label = 'Kompresi ZIP' }
-        @{ Key = 'Stats';   Label = 'Monitoring Arsip' }
+        @{ Key = 'Monthly'; Label = 'Siapkan Bulan' }
+        @{ Key = 'Docs';    Label = 'Isi & Arsipkan' }
+        @{ Key = 'Stats';   Label = 'Monitoring' }
     )
 
     $yPos = 80
@@ -1376,10 +1455,22 @@ function Add-StatRow {
 }
 
 function Build-Tabs {
+    # Satu pilihan periode untuk semua tombol (dulu tiap bagian punya pilihan sendiri).
+    $Script:YearBox1 = $Script:YearBox
+    $Script:YearBox2 = $Script:YearBox
+    $Script:YearBox3 = $Script:YearBox
+    $Script:YearBox4 = $Script:YearBox
+    $Script:YearBox5 = $Script:YearBox
+    $Script:MonthCombo1 = $Script:MonthCombo
+    $Script:MonthCombo2 = $Script:MonthCombo
+    $Script:MonthCombo3 = $Script:MonthCombo
+    $Script:MonthCombo4 = $Script:MonthCombo
+    $Script:MonthCombo5 = $Script:MonthCombo
+
     $pageHome = $Script:panels['Home']
     $wrapH = $Script:NavButtons | Where-Object Key -eq 'Home' | Select-Object -ExpandProperty Wrap
 
-    $c1 = New-Card 'Ringkasan Arsip' $c_blue 980 'Status data klaim seluruh arsip prothesa'
+    $c1 = New-Card 'Ringkasan' $c_blue 980 'Kondisi arsip saat ini'
     $statRow = Add-StatRow $c1 @(
         @{ Caption = 'Tahun'; Color = $c_blue }
         @{ Caption = 'Bulan'; Color = $c_teal }
@@ -1389,15 +1480,15 @@ function Build-Tabs {
     Fit-Card $c1
     [void]$wrapH.Controls.Add($c1)
 
-    $c2 = New-Card 'Folder Arsip (Lokasi Data)' $c_green 980 'Semua folder tahunan (A=2024, B=2025, C=2026, dst) berada di lokasi ini'
+    $c2 = New-Card 'Data Tersimpan Di' $c_green 980 'Folder utama berisi arsip tahunan (A=2024, B=2025, C=2026, dst)'
     $Script:BoxPath = New-Box '' 620 34
     $Script:BoxPath.ReadOnly = $true
     $Script:BoxPath.Text = $Script:BasePath
     $Script:LblPath = $Script:BoxPath
-    Add-CardRow $c2 'Lokasi Folder' $Script:BoxPath 140
-    $btnOpen = New-Btn 'Buka di Explorer' $c_greenDark 200 38
+    Add-CardRow $c2 'Lokasi' $Script:BoxPath 140
+    $btnOpen = New-Btn 'Buka Folder' $c_greenDark 200 38
     $btnOpen.Add_Click({ Open-Folder $Script:BasePath })
-    $btnChange = New-Btn 'Ganti Folder' $c_blueDark 180 38
+    $btnChange = New-Btn 'Pindah Lokasi' $c_blueDark 180 38
     $btnChange.Add_Click({
         $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
         $dlg.Description = 'Pilih folder tempat arsip prothesa (berisi A=PROTHESA 2024, dll)'
@@ -1411,69 +1502,52 @@ function Build-Tabs {
         }
     })
     Add-ButtonRow $c2 @($btnOpen, $btnChange) 200 38
-    Add-Note $c2 'Kosong = folder tempat program ini dijalankan / induknya (auto-detect).'
     Fit-Card $c2
     [void]$wrapH.Controls.Add($c2)
 
-    $c3 = New-Card 'Aksi Cepat' $c_blue 980 'Pindai arsip, tampilkan ringkasan, atau buka berkas'
-    $btnExport = New-Btn 'Scan Seluruh Arsip' $c_blueDark 458 40
+    $c3 = New-Card 'Yang Bisa Dilakukan' $c_blue 980 'Periksa arsip atau mulai kerjakan bulan berjalan'
+    $btnExport = New-Btn 'Periksa Arsip' $c_blueDark 458 40
     $btnExport.Add_Click({ Invoke-ExportStatus })
-    $btnRing = New-Btn 'Tampilkan Ringkasan Teks' $c_purple 458 40
+    $btnRing = New-Btn 'Lihat Ringkasan' $c_purple 458 40
     $btnRing.Add_Click({ Show-Ringkasan })
     Add-ButtonRow $c3 @($btnExport, $btnRing) 458 40
     $btnOpenRoot = New-Btn 'Buka Folder Arsip' $c_teal 458 40
     $btnOpenRoot.Add_Click({ Open-Folder $Script:BasePath })
-    $btnZipTab = New-Btn 'Buka Tab ZIP' $c_amber 458 40
-    $btnZipTab.Add_Click({ Select-Tab 'Zip' })
-    Add-ButtonRow $c3 @($btnOpenRoot, $btnZipTab) 458 40
+    $btnGoMonthly = New-Btn 'Mulai: Siapkan Bulan' $c_amber 458 40
+    $btnGoMonthly.Add_Click({ Select-Tab 'Monthly' })
+    Add-ButtonRow $c3 @($btnOpenRoot, $btnGoMonthly) 458 40
     Fit-Card $c3
     [void]$wrapH.Controls.Add($c3)
 
     $Script:LblPath = $Script:BoxPath
 
-    $wrapM = $Script:NavButtons | Where-Object Key -eq 'Month' | Select-Object -ExpandProperty Wrap
-    $cm = New-Card 'Buat Folder Bulan Baru' $c_blue 980 'Struktur folder bulan + subfolder klaim, berkas umum & RJTP'
-    $Script:YearBox1 = New-YearBox
-    Add-CardRow $cm 'Tahun' $Script:YearBox1
-    $Script:MonthCombo1 = New-Drop $Script:MonthItems 220
-    $Script:MonthCombo1.SelectedIndex = (Get-Date).Month - 1
-    Add-CardRow $cm 'Bulan' $Script:MonthCombo1
-    $Script:ChkCopy1 = New-Chk 'Copy template (.doc/.xlsx) dari master mandiri _TEMPLATES/'
+    $wrapB = $Script:NavButtons | Where-Object Key -eq 'Monthly' | Select-Object -ExpandProperty Wrap
+    Add-Note $wrapB 'Ikuti urutan 1 - 2 - 3 di bawah. Semuanya memakai "Bulan kerja" yang dipilih di atas.' $c_dim
+    $cm = New-Card 'Langkah 1 - Buat Folder Bulan' $c_blue 980 'Dibuatkan otomatis: folder tahun, folder bulan, KLAIM, BERKAS UMUM, RJTP'
+    $Script:ChkCopy1 = New-Chk 'Juga salinkan 5 template dokumen'
     Add-CardRow $cm '' $Script:ChkCopy1 0
-    $Script:ChkAutoCopy = New-Chk 'Langsung perbarui data isi Word/Excel setelah copy'
+    $Script:ChkAutoCopy = New-Chk 'Langsung isi otomatis setelah disalin'
     $Script:ChkAutoCopy.Checked = $Script:AutoUpdateAfterCopy
     $Script:ChkAutoCopy.Add_CheckedChanged({ $Script:AutoUpdateAfterCopy = $Script:ChkAutoCopy.Checked })
     Add-CardRow $cm '' $Script:ChkAutoCopy 0
-    $btnBulan = New-Btn 'Buat Folder Bulan Baru' $c_blueDark 280 42
+    $btnBulan = New-Btn 'Buat Folder Bulan' $c_blueDark 280 42
     $btnBulan.Add_Click({ Invoke-NewMonth })
     Add-CardRow $cm '' $btnBulan 0
-    Add-Note $cm 'Urutan otomatis: folder tahun -> folder bulan -> KLAIM -> BERKAS UMUM -> RJTP, lalu salin template.'
     Fit-Card $cm
-    [void]$wrapM.Controls.Add($cm)
+    [void]$wrapB.Controls.Add($cm)
 
-    $wrapC = $Script:NavButtons | Where-Object Key -eq 'Copy' | Select-Object -ExpandProperty Wrap
-    $cc = New-Card 'Copy Template Master Mandiri' $c_purple 980 'Menyalin 5 file template (.doc & .xlsx) dari folder _TEMPLATES/'
-    $Script:YearBox2 = New-YearBox
-    Add-CardRow $cc 'Tahun' $Script:YearBox2
-    $Script:MonthCombo2 = New-Drop $Script:MonthItems 220
-    $Script:MonthCombo2.SelectedIndex = (Get-Date).Month - 1
-    Add-CardRow $cc 'Bulan' $Script:MonthCombo2
-    $Script:ChkAutoCopy2 = New-Chk 'Langsung perbarui data isi Word/Excel setelah copy'
+    $cc = New-Card 'Langkah 2 - Salin Template Dokumen' $c_purple 980 'Ambil 5 template dari folder _TEMPLATES'
+    $Script:ChkAutoCopy2 = New-Chk 'Langsung isi otomatis setelah disalin'
     Add-CardRow $cc '' $Script:ChkAutoCopy2 0
-    $btnCopy = New-Btn 'Salin 5 File Template' $c_purple 280 42
+    $btnCopy = New-Btn 'Salin Template' $c_purple 280 42
     $btnCopy.Add_Click({ Invoke-CopyTemplate })
     Add-CardRow $cc '' $btnCopy 0
-    Add-Note $cc 'Template diprioritaskan dari folder master mandiri _TEMPLATES/ (bebas tanpa folder arsip tahun lama).'
+    Add-Note $cc 'Gunakan ini bila Langkah 1 dilewati atau template belum ada.'
     Fit-Card $cc
-    [void]$wrapC.Controls.Add($cc)
+    [void]$wrapB.Controls.Add($cc)
 
-    $wrapP = $Script:NavButtons | Where-Object Key -eq 'Patient' | Select-Object -ExpandProperty Wrap
-    $cp1 = New-Card 'Tambah 1 Pasien' $c_green 980 'Buat subfolder nomor + 3 berkas placeholder PDF (BUKTI LAYANAN, FKPP, RESEP)'
-    $Script:YearBox3 = New-YearBox
-    Add-CardRow $cp1 'Tahun' $Script:YearBox3
-    $Script:MonthCombo3 = New-Drop $Script:MonthItems 220
-    $Script:MonthCombo3.SelectedIndex = (Get-Date).Month - 1
-    Add-CardRow $cp1 'Bulan' $Script:MonthCombo3
+    $wrapP = $Script:NavButtons | Where-Object Key -eq 'Monthly' | Select-Object -ExpandProperty Wrap
+    $cp1 = New-Card 'Langkah 3 - Daftarkan Satu Pasien' $c_green 980 'Dibuatkan folder bernomor + 3 form kosong (BUKTI LAYANAN, FKPP, RESEP)'
     $Script:BoxPasien = New-Box 'Nama pasien (contoh: SITI AMINAH)' 420 34
     Add-CardRow $cp1 'Nama Pasien' $Script:BoxPasien
     $btnP1 = New-Btn 'Tambah Pasien' $c_greenDark 220 40
@@ -1482,7 +1556,7 @@ function Build-Tabs {
     Fit-Card $cp1
     [void]$wrapP.Controls.Add($cp1)
 
-    $cp2 = New-Card 'Batch Buat Folder Pasien' $c_pink 980 'Satu nama per baris - cepat untuk pendaftaran awal bulan'
+    $cp2 = New-Card 'Langkah 3 - Daftarkan Banyak Pasien Sekaligus' $c_pink 980 'Tulis satu nama tiap baris'
     $Script:BoxBatch = New-Object System.Windows.Forms.TextBox
     $Script:BoxBatch.Multiline = $true
     $Script:BoxBatch.Width = 880
@@ -1503,17 +1577,13 @@ function Build-Tabs {
     $btnP2 = New-Btn 'Buat Semua Folder Pasien' $c_pink 280 42
     $btnP2.Add_Click({ Invoke-PatientBatch })
     Add-CardRow $cp2 '' $btnP2 0
-    Add-Note $cp2 'Berkas yang dibuat adalah placeholder kosong - ganti dengan scan PDF asli.'
+    Add-Note $cp2 'File yang dibuat masih kosong - ganti dengan hasil scan PDF asli.'
     Fit-Card $cp2
     [void]$wrapP.Controls.Add($cp2)
 
-    $wrapF = $Script:NavButtons | Where-Object Key -eq 'Fill' | Select-Object -ExpandProperty Wrap
-    $cf = New-Card 'Perbarui Isi Dokumen Klaim (Word & Excel)' $c_orange 980 'Auto-fill bulan, romawi surat, tanggal TTD, FPK, jumlah kasus & biaya'
-    $Script:YearBox4 = New-YearBox
-    Add-CardRow $cf 'Tahun' $Script:YearBox4
-    $Script:MonthCombo4 = New-Drop $Script:MonthItems 220
-    $Script:MonthCombo4.SelectedIndex = (Get-Date).Month - 1
-    Add-CardRow $cf 'Bulan' $Script:MonthCombo4
+    $wrapD = $Script:NavButtons | Where-Object Key -eq 'Docs' | Select-Object -ExpandProperty Wrap
+    Add-Note $wrapD 'Lanjutan dari tab Siapkan Bulan. Tetap memakai "Bulan kerja" yang sama.' $c_dim
+    $cf = New-Card 'Langkah 4 - Isi Dokumen Otomatis' $c_orange 980 'Word & Excel diisi otomatis: tanggal, FPK, jumlah kasus, biaya'
     $Script:BoxTanggal = New-Box 'contoh: 6 Maret 2026' 360 34
     Add-CardRow $cf 'Tanggal TTD' $Script:BoxTanggal
     $Script:BoxFpk = New-Box 'contoh: P2601000026282' 360 34
@@ -1521,39 +1591,41 @@ function Build-Tabs {
     $Script:BoxKasus = New-Box 'contoh: 7' 200 34
     Add-CardRow $cf 'Jumlah Kasus' $Script:BoxKasus
     $Script:BoxBiaya = New-Box 'contoh: 5250000 (tanpa titik)' 280 34
-    Add-CardRow $cf 'Biaya Total (Rp)' $Script:BoxBiaya
-    $btnFill = New-Btn 'Perbarui Semua Dokumen Word & Excel' $c_orange 360 42
+    Add-CardRow $cf 'Total Biaya (Rp)' $Script:BoxBiaya
+    $btnFill = New-Btn 'Isi Dokumen Sekarang' $c_orange 360 42
     $btnFill.Add_Click({ Invoke-Update })
     Add-CardRow $cf '' $btnFill 0
-    Add-Note $cf 'Otomasi COM aman dengan pelepasan memori (FinalReleaseComObject) untuk mencegah proses zombie.'
+    Add-Note $cf 'Butuh Microsoft Word & Excel terpasang di PC ini.'
     Fit-Card $cf
-    [void]$wrapF.Controls.Add($cf)
+    [void]$wrapD.Controls.Add($cf)
 
-    $wrapZ = $Script:NavButtons | Where-Object Key -eq 'Zip' | Select-Object -ExpandProperty Wrap
-    $cz = New-Card 'Kompresi Folder Bulan ke ZIP' $c_red 980 'Mengkompresi seluruh berkas klaim bulan menjadi file .zip siap kirim'
-    $Script:YearBox5 = New-YearBox
-    Add-CardRow $cz 'Tahun' $Script:YearBox5
-    $Script:MonthCombo5 = New-Drop $Script:MonthItems 220
-    $Script:MonthCombo5.SelectedIndex = (Get-Date).Month - 1
-    Add-CardRow $cz 'Bulan' $Script:MonthCombo5
-    $btnZip = New-Btn 'Buat Berkas ZIP' $c_redDark 260 42
+    $cr = New-Card 'Langkah 5 - Samakan Nama Berkas (opsional)' $c_purple 980 'Ubah "1.pdf, 2.pdf, ..." mengikuti nama bulan sebelumnya'
+    $btnRename = New-Btn 'Samakan Nama Berkas' $c_purple 280 42
+    $btnRename.Add_Click({ Invoke-RenameGui })
+    Add-CardRow $cr '' $btnRename 0
+    Add-Note $cr 'Jalankan bila ada file bernomor yang namanya belum lengkap.'
+    Fit-Card $cr
+    [void]$wrapD.Controls.Add($cr)
+
+    $cz = New-Card 'Langkah 6 - Arsipkan ke ZIP' $c_red 980 'Berkas bulan dipadatkan jadi satu file .zip siap kirim'
+    $btnZip = New-Btn 'Buat ZIP' $c_redDark 260 42
     $btnZip.Add_Click({ Invoke-Zip })
     Add-CardRow $cz '' $btnZip 0
-    Add-Note $cz 'File ZIP dibuat di folder tahun, di samping folder bulan aslinya.'
+    Add-Note $cz 'File ZIP tersimpan di samping folder bulan.'
     Fit-Card $cz
-    [void]$wrapZ.Controls.Add($cz)
+    [void]$wrapD.Controls.Add($cz)
 
     $wrapS = $Script:NavButtons | Where-Object Key -eq 'Stats' | Select-Object -ExpandProperty Wrap
-    $cs = New-Card 'Monitoring & Validasi Arsip' $c_teal 980 'Pindai arsip dengan Single-Source Validation & perbarui status'
-    $btnScan = New-Btn 'Scan Seluruh Arsip' $c_teal 320 40
+    $cs = New-Card 'Periksa Kelengkapan' $c_teal 980 'Pindai arsip dan tandai yang kurang'
+    $btnScan = New-Btn 'Periksa Sekarang' $c_teal 320 40
     $btnScan.Add_Click({ Invoke-ExportStatus })
-    $btnRing2 = New-Btn 'Tampilkan Ringkasan Teks' $c_purple 320 40
+    $btnRing2 = New-Btn 'Lihat Ringkasan' $c_purple 320 40
     $btnRing2.Add_Click({ Show-Ringkasan })
     Add-ButtonRow $cs @($btnScan, $btnRing2) 320 40
     Fit-Card $cs
     [void]$wrapS.Controls.Add($cs)
 
-    $ct = New-Card 'Pohon Status Arsip' $c_teal 980 'Klik ganda folder mana saja untuk langsung membuka di Windows Explorer'
+    $ct = New-Card 'Status Tiap Bulan' $c_teal 980 'Klik 2x pada baris untuk membuka foldernya'
     $Script:Tree = New-Object System.Windows.Forms.TreeView
     $Script:Tree.BackColor = Col('#0F1522')
     $Script:Tree.ForeColor = $c_text

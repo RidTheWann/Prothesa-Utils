@@ -384,6 +384,145 @@ function Copy-TemplatesFromPrevious {
     }
 }
 
+function Get-BerkasUmumPath {
+    <#
+    .SYNOPSIS
+    Resolve path folder BERKAS UMUM untuk bulan tertentu (dengan fallback pola KLAIM/BERKAS UMUM).
+    #>
+    param(
+        [Parameter(Mandatory)][int]$Year,
+        [Parameter(Mandatory)][int]$Month
+    )
+    $monthPath = Get-MonthPath -Year $Year -Month $Month
+    if (-not $monthPath) { return $null }
+    $klaimFolder = Get-ChildItem -LiteralPath $monthPath -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match "^KLAIM" } | Select-Object -First 1
+    if (-not $klaimFolder) { return $null }
+    $berkasFolder = Get-ChildItem -LiteralPath $klaimFolder.FullName -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match "^BERKAS UMUM" } | Select-Object -First 1
+    if ($berkasFolder) { return $berkasFolder.FullName }
+    return $null
+}
+
+function Find-PreviousMonthPath {
+    <#
+    .SYNOPSIS
+    Cari mundur (maks 12 bulan) folder bulan arsip yang benar-benar ada.
+    #>
+    param(
+        [Parameter(Mandatory)][int]$Year,
+        [Parameter(Mandatory)][int]$Month
+    )
+    for ($i = 1; $i -le 12; $i++) {
+        $m = $Month - $i
+        $y = $Year
+        while ($m -lt 1) { $m += 12; $y -= 1 }
+        $p = Get-MonthPath -Year $y -Month $m
+        if ($p) { return [pscustomobject]@{ Year = $y; Month = $m; Path = $p } }
+    }
+    return $null
+}
+
+function Rename-BerkasUmumFromPrevious {
+    <#
+    .SYNOPSIS
+    Samakan nama file BERKAS UMUM bulan tujuan mengikuti bulan sebelumnya (cocok angka depan).
+    File "1.pdf, 2.pdf, ..." diganti namanya memakai nama dasar file bernomor sama di bulan sumber.
+    Mendukung -WhatIf untuk preview tanpa mengubah apa pun.
+    .EXAMPLE
+    Rename-BerkasUmumFromPrevious -Year 2026 -Month 8 -WhatIf
+    Rename-BerkasUmumFromPrevious -Year 2026 -Month 8
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)][int]$Year,
+        [Parameter(Mandatory)][int]$Month,
+        [switch]$KeepSourceExtension
+    )
+
+    $destDir = Get-BerkasUmumPath -Year $Year -Month $Month
+    if (-not $destDir) {
+        Write-ColorText "  Folder BERKAS UMUM bulan tujuan tidak ditemukan. Buat dulu!" Red
+        return
+    }
+    $prev = Find-PreviousMonthPath -Year $Year -Month $Month
+    if (-not $prev) {
+        Write-ColorText "  Tidak ada folder bulan sebelumnya di arsip." Red
+        return
+    }
+    $srcDir = Get-BerkasUmumPath -Year $prev.Year -Month $prev.Month
+    if (-not $srcDir) {
+        Write-ColorText "  Folder BERKAS UMUM bulan sebelumnya tidak ditemukan: $(Split-Path -Leaf $prev.Path)" Red
+        return
+    }
+
+    Write-ColorText "  Sumber : $(Split-Path -Leaf $srcDir)" Cyan
+    Write-ColorText "  Tujuan : $(Split-Path -Leaf $destDir)" Cyan
+
+    $map = @{}
+    Get-ChildItem -LiteralPath $srcDir -File -ErrorAction SilentlyContinue | ForEach-Object {
+        if ($_.Name -match '^\s*(\d+)\b') {
+            $num = $matches[1]
+            if (-not $map.ContainsKey($num)) {
+                $map[$num] = [pscustomobject]@{
+                    Base = [System.IO.Path]::GetFileNameWithoutExtension($_.Name)
+                    Ext  = $_.Extension
+                }
+            } else {
+                Write-ColorText "  Warning: nomor duplikat di sumber untuk $num, lewati: $($_.Name)" Yellow
+            }
+        }
+    }
+    if ($map.Count -eq 0) {
+        Write-ColorText "  Tidak ada file bernomor di folder sumber." Red
+        return
+    }
+
+    $renamed = 0; $skipped = 0; $noMatch = 0
+    Get-ChildItem -LiteralPath $destDir -File -ErrorAction SilentlyContinue | ForEach-Object {
+        $target = $_
+        if ($target.Name -notmatch '^\s*(\d+)\b') {
+            Write-ColorText "  Tanpa angka depan, lewati: $($target.Name)" DarkGray
+            $skipped++
+            return
+        }
+        $tn = $matches[1]
+        if (-not $map.ContainsKey($tn)) {
+            Write-ColorText "  Tidak ada nama sumber untuk nomor $tn, lewati: $($target.Name)" Yellow
+            $noMatch++
+            return
+        }
+        $info = $map[$tn]
+        $newExt = if ($KeepSourceExtension) { $info.Ext } else { $target.Extension }
+        $newNameBase = $info.Base
+        $newName = "$newNameBase$newExt"
+        $destPath = Join-Path $target.DirectoryName $newName
+
+        if ($target.FullName -ieq $destPath) {
+            Write-ColorText "  Sudah benar: $($target.Name)" DarkGray
+            $skipped++
+            return
+        }
+        $i = 1
+        while (Test-Path -LiteralPath $destPath) {
+            $suffix = if ($i -gt 1) { " -copy($i)" } else { " -copy" }
+            $newName = "$newNameBase$suffix$newExt"
+            $destPath = Join-Path $target.DirectoryName $newName
+            $i++
+        }
+
+        if ($PSCmdlet.ShouldProcess($target.FullName, "Rename menjadi $newName")) {
+            Rename-Item -LiteralPath $target.FullName -NewName $newName
+            Write-ColorText "  Renamed '$($target.Name)' -> '$newName'" Green
+            $renamed++
+        }
+    }
+
+    Write-Host ""
+    Write-ColorText "  Selesai: $renamed diganti nama, $skipped dilewati, $noMatch tanpa pasangan." Green
+    Write-Host ""
+}
+
 function New-PatientFolder {
     <#
     .SYNOPSIS
@@ -1261,6 +1400,7 @@ function Show-Menu {
     Write-ColorText "  [6] Scan Seluruh Arsip & Simpan Data" White
     Write-ColorText "  [7] Lihat Ringkasan Cepat" White
     Write-ColorText "  [8] Update Isi Template (Word/Excel)" White
+    Write-ColorText "  [9] Samakan Nama Berkas Umum dari Bulan Sebelumnya" White
     Write-Host ""
     Write-ColorText "  [0] Keluar" DarkGray
     Write-Host ""
@@ -1423,6 +1563,18 @@ function Start-ProthesaManager {
                 Write-ColorText "  UPDATE ISI TEMPLATE (WORD/EXCEL)" Yellow
                 $ym = Read-YearMonth
                 Update-AllTemplates -Year $ym[0] -Month $ym[1] | Out-Null
+                Read-Host "  Tekan Enter untuk lanjut..."
+            }
+            "9" {
+                Write-Host ""
+                Write-ColorText "  SAMAKAN NAMA BERKAS UMUM DARI BULAN SEBELUMNYA" Yellow
+                $ym = Read-YearMonth
+                Write-ColorText "  Preview dulu (tidak mengubah file)..." Cyan
+                Rename-BerkasUmumFromPrevious -Year $ym[0] -Month $ym[1] -WhatIf
+                $go = (Read-Host "  Jalankan rename beneran? (y/n)").Trim()
+                if ($go -eq 'y') {
+                    Rename-BerkasUmumFromPrevious -Year $ym[0] -Month $ym[1] | Out-Null
+                }
                 Read-Host "  Tekan Enter untuk lanjut..."
             }
             "0" {
