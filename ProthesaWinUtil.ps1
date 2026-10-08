@@ -1394,7 +1394,7 @@ function Build-Main {
     }
 
     $ver = New-Object System.Windows.Forms.Label
-    $ver.Text = 'v2.1 | Ridwan Gatro'
+    $ver.Text = 'v2.1.1 | Ridwan Gatro'
     $ver.Font = Fui 8.5
     $ver.ForeColor = $c_muted
     $ver.AutoSize = $true

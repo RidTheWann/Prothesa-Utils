@@ -4,7 +4,7 @@
 100% PowerShell native (WinForms + CLI), tanpa server dan tanpa dependensi eksternal.
 
 *Developer: Ridwan Gatro (RidTheWann)*
-*Versi: 2.1.0*
+*Versi: 2.1.1*
 
 ---
 
@@ -14,7 +14,7 @@ Aplikasi **wajib diinstall** — file EXE tidak bisa dijalankan langsung (double
 
 ### Opsi A — Setup.exe (disarankan)
 
-1. Jalankan `ProthesaUtil-Setup-2.1.0.exe` (dari halaman Releases).
+1. Jalankan `ProthesaUtil-Setup-2.1.1.exe` (dari halaman Releases).
 2. Jika muncul SmartScreen ("Windows protected your PC") karena file belum ditandatangani digital: pilih *More info* → *Run anyway*.
 3. Ikuti wizard (Next → Install → Finish). Tidak butuh hak admin.
 4. Centang "Pasang data contoh terenkripsi" bila tersedia — sampel bulan terakhir akan di-decrypt otomatis ke folder data.

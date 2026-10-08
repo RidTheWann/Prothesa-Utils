@@ -1,6 +1,6 @@
 {
     "name": "ProthesaUtil",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "developer": "Ridwan Gatro (RidTheWann)",
     "entry_gui": "ProthesaWinUtil.ps1",
     "entry_cli": "ProthesaManager.ps1",
